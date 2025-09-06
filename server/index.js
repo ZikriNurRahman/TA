@@ -1,8 +1,12 @@
 const express = require("express");
-const app = express();
+const cors = require("cors");
+
 const port = 3000;
 
-// Ini adalah "endpoint" atau "route" sederhana.
+const app = express();
+// supaya bisa cross port
+app.use(cors());
+
 // Ketika aplikasi client mengakses alamat ini, server akan merespons.
 app.get("/", (req, res) => {
   res.send("Halo, ini adalah server untuk aplikasi Smarthome!");
