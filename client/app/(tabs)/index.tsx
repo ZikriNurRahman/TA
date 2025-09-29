@@ -1,37 +1,79 @@
-import { Text, View } from "react-native";
-import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
 import { useEffect, useState } from "react";
-import { styles } from "../../styles/styles";
+import { FlatList, Alert, Text, View, SafeAreaView } from "react-native";
+import { DeviceCard } from "@/components/DeviceCard";
+import type { Device } from "@/types/Device";
+import { globalStyles } from "../../styles/styles";
+
+const API_URL = "http://localhost:3000";
 
 export default function HomeScreen() {
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(true);
   // State untuk menyimpan pesan dari server
   const [serverMessage, setServerMessage] = useState("Sedang memuat...");
 
-  useEffect(() => {
-    // Fungsi untuk mengambil data dari server
-    const fetchData = async () => {
-      try {
-        // Ganti 'localhost' dengan alamat IP komputer Anda jika menjalankan di perangkat fisik
-        const response = await fetch("http://localhost:3000/");
-        const data = await response.text();
-        setServerMessage(data);
-      } catch (error) {
-        console.error("Gagal terhubung ke server:", error);
-        setServerMessage("Gagal terhubung ke server.");
-      }
-    };
+  const fetchDevices = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_URL}/devices`);
+      const data: Device[] = await response.json();
+      setDevices(data);
+    } catch (error) {
+      console.error("Gagal mengambil data perangkat:", error);
+      Alert.alert("Error", "Tidak dapat terhubung ke server.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    fetchData();
-  }, []); // Array kosong berarti efek ini hanya berjalan sekali saat komponen dimuat
+  const handleToggle = async (id: number) => {
+    setDevices((currentDevices) =>
+      currentDevices.map((device) =>
+        device.id === id ? { ...device, isOn: !device.isOn } : device
+      )
+    );
+
+    try {
+      const response = await fetch(`${API_URL}/devices/${id}/toggle`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("Gagal mengubah status perangkat di server.");
+      }
+    } catch (error) {
+      console.error("Error saat toggle:", error);
+      Alert.alert("Error", "Gagal menyinkronkan dengan server.");
+      setDevices((currentDevices) =>
+        currentDevices.map((device) =>
+          device.id === id ? { ...device, isOn: !device.isOn } : device
+        )
+      );
+    }
+  };
+
+  useEffect(() => {
+    fetchDevices();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={globalStyles.loadingContainer}>
+        <Text>Memuat perangkat...</Text>
+      </View>
+    );
+  }
 
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title">Selamat Datang!</ThemedText>
-      <View style={styles.messageContainer}>
-        <Text>Pesan dari server:</Text>
-        <ThemedText type="defaultSemiBold">{serverMessage}</ThemedText>
-      </View>
-    </ThemedView>
+    <SafeAreaView style={globalStyles.homeContainer}>
+      <Text style={globalStyles.homeTitle}>Perangkat Smarthome</Text>
+      <FlatList
+        data={devices}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={({ item }) => (
+          <DeviceCard device={item} onToggle={() => handleToggle(item.id)} />
+        )}
+        contentContainerStyle={globalStyles.listContainer}
+      />
+    </SafeAreaView>
   );
 }
