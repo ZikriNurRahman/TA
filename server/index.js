@@ -83,6 +83,31 @@ app.post("/devices/:id/toggle", async (req, res) => {
   }
 });
 
+// Endpoint untuk mengedit (update) nama perangkat
+app.put("/devices/:id", async (req, res) => {
+  try {
+    const { name } = req.body; // Ambil nama baru dari body
+    if (!name) {
+      return res.status(400).json({ message: "Nama tidak boleh kosong" });
+    }
+
+    const device = await Device.findByIdAndUpdate(
+      req.params.id,
+      { name: name }, // Data yang ingin diupdate
+      { new: true } // Opsi untuk mengembalikan dokumen yang sudah ter-update
+    );
+
+    if (device) {
+      console.log(`Perangkat diperbarui: ${device.name}`);
+      res.json(device);
+    } else {
+      res.status(404).json({ message: "Perangkat tidak ditemukan" });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Gagal memperbarui perangkat", error });
+  }
+});
+
 // Endpoint untuk mendapatkan satu perangkat berdasarkan ID
 app.get("/devices/:id", async (req, res) => {
   try {

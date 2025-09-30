@@ -10,15 +10,13 @@ import {
 import { Link, useFocusEffect } from "expo-router";
 import { DeviceCard } from "@/components/DeviceCard";
 import type { Device } from "@/types/Device";
-import { globalStyles } from "@/styles/styles";
+import { homeStyles } from "@/styles/styles";
 
 const API_URL = "http://localhost:3000";
 
 export default function HomeScreen() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
-  // State untuk menyimpan pesan dari server
-  const [serverMessage, setServerMessage] = useState("Sedang memuat...");
 
   const fetchDevices = async () => {
     try {
@@ -67,19 +65,19 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={globalStyles.loadingContainer}>
+      <SafeAreaView style={homeStyles.loadingContainer}>
         <Text>Memuat perangkat...</Text>
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={globalStyles.homeContainer}>
-      <View style={globalStyles.homeHeader}>
-        <Text style={globalStyles.homeTitle}>Perangkat</Text>
+    <SafeAreaView style={homeStyles.container}>
+      <View style={homeStyles.header}>
+        <Text style={homeStyles.title}>Perangkat</Text>
         <Link href="/add-device" asChild>
-          <TouchableOpacity style={globalStyles.addButton}>
-            <Text style={globalStyles.addButtonText}>+</Text>
+          <TouchableOpacity style={homeStyles.addButton}>
+            <Text style={homeStyles.addButtonText}>+</Text>
           </TouchableOpacity>
         </Link>
       </View>
@@ -89,7 +87,7 @@ export default function HomeScreen() {
         renderItem={({ item }) => (
           <DeviceCard device={item} onToggle={() => handleToggle(item._id)} />
         )}
-        contentContainerStyle={globalStyles.listContainer}
+        contentContainerStyle={homeStyles.listContainer}
       />
     </SafeAreaView>
   );

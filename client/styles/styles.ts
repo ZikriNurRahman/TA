@@ -1,22 +1,21 @@
 import { StyleSheet } from "react-native";
 import { Colors } from "@/constants/Colors";
 
-// Global Styles
-export const globalStyles = StyleSheet.create({
-  // Styles for HomeScreen (index.tsx)
-  homeContainer: {
+// style untuk HomeScreen
+export const homeStyles = StyleSheet.create({
+  container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
   },
-  homeHeader: {
+  header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingTop: 50, // Sesuaikan jika perlu
+    paddingTop: 50,
     marginBottom: 20,
   },
-  homeTitle: {
+  title: {
     fontSize: 28,
     fontWeight: "bold",
     color: "#000",
@@ -43,64 +42,32 @@ export const globalStyles = StyleSheet.create({
     fontSize: 24,
     lineHeight: 28,
   },
+});
 
-  // Styles for DeviceCard.tsx
-  deviceCard: {
+// Styles untuk DeviceCard.tsx
+export const deviceCardStyles = StyleSheet.create({
+  card: {
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
-    elevation: 3,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
-  deviceIcon: {
+  icon: {
     fontSize: 32,
     marginRight: 16,
   },
-  deviceTextContainer: {
+  textContainer: {
     flex: 1,
     backgroundColor: "transparent",
   },
-  deviceSubtitle: {
+  subtitle: {
     fontSize: 20,
     fontWeight: "bold",
   },
-
-  // Styles for AddDeviceScreen (add-device.tsx)
-  addDeviceContainer: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: "#f5f5f5",
-  },
-  addDeviceTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  addDeviceInput: {
-    height: 50,
-    borderColor: "#ccc",
-    borderWidth: 1,
-    borderRadius: 8,
-    marginBottom: 15,
-    paddingHorizontal: 15,
-    backgroundColor: "#fff",
-  },
-  messageContainer: {
-    marginTop: 20,
-    alignItems: "center",
-    padding: 15,
-    borderRadius: 8,
-    backgroundColor: "#f0f0f0",
-  },
 });
 
-// Style for [id].tsx
+// Styles untuk DeviceDetailScreen ([id].tsx)
 export const idStyles = StyleSheet.create({
   container: {
     flex: 1,
@@ -123,8 +90,17 @@ export const idStyles = StyleSheet.create({
     color: "red",
   },
   buttonContainer: {
-    marginTop: "auto", // Mendorong tombol ke bagian bawah layar
+    marginTop: "auto",
     paddingTop: 20,
+  },
+  inputText: {
+    height: 50,
+    borderColor: "#ccc",
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 15,
+    paddingHorizontal: 15,
+    backgroundColor: "#fff",
   },
 });
 
@@ -133,22 +109,58 @@ export const dynamicCardStyles = {
   on: {
     backgroundColor: Colors.light.tint,
     titleColor: "#fff",
-    statusColor: "#eee",
+    statusColor: "#e0e0e0",
+    // Tambahkan shadow saat aktif
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
   },
   off: {
     backgroundColor: "#fff",
     titleColor: "#000",
     statusColor: "#666",
+    // Tambahkan shadow yang lebih soft saat tidak aktif
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
   },
 };
 
-// style untuk ConfirmModal.tsx
+// Styles untuk AddDeviceScreen (add-device.tsx)
+export const addDeviceStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: "#f5f5f5",
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  input: {
+    height: 50,
+    borderColor: "#ccc",
+    borderWidth: 1,
+    borderRadius: 8,
+    marginBottom: 15,
+    paddingHorizontal: 15,
+    backgroundColor: "#fff",
+  },
+});
+
+// Styles untuk ConfirmModal.tsx
 export const confirmModalStyles = StyleSheet.create({
   centeredView: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)", // Latar belakang gelap transparan
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   modalView: {
     margin: 20,

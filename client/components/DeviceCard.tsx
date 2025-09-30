@@ -1,8 +1,9 @@
 import React from "react";
-import { Switch, Text, View, TouchableOpacity, Pressable } from "react-native";
+import { Switch, Text, View, Pressable } from "react-native";
 import { Device } from "@/types/Device";
-import { globalStyles, dynamicCardStyles } from "@/styles/styles";
+import { deviceCardStyles, dynamicCardStyles } from "@/styles/styles";
 import { useRouter } from "expo-router";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 type DeviceCardProps = {
   device: Device;
@@ -22,11 +23,18 @@ export function DeviceCard({ device, onToggle }: DeviceCardProps) {
     });
   };
 
+  // 2. Pilih nama ikon berdasarkan tipe perangkat
+  const getIconName = () => {
+    if (device.type.toLowerCase() === "light") return "lightbulb";
+    if (device.type.toLowerCase() === "fan") return "fan";
+    return "chip"; // Ikon default
+  };
+
   return (
     // Gunakan View sebagai pembungkus luar
     <View
       style={[
-        globalStyles.deviceCard,
+        deviceCardStyles.card,
         { backgroundColor: styles.backgroundColor },
       ]}
     >
@@ -35,10 +43,10 @@ export function DeviceCard({ device, onToggle }: DeviceCardProps) {
         onPress={handleNavigation}
         style={{ flexDirection: "row", flex: 1, alignItems: "center" }}
       >
-        <Text style={globalStyles.deviceIcon}>{icon}</Text>
-        <View style={globalStyles.deviceTextContainer}>
+        <Text style={deviceCardStyles.icon}>{icon}</Text>
+        <View style={deviceCardStyles.textContainer}>
           <Text
-            style={[globalStyles.deviceSubtitle, { color: styles.titleColor }]}
+            style={[deviceCardStyles.subtitle, { color: styles.titleColor }]}
           >
             {device.name}
           </Text>
