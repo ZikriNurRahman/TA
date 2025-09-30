@@ -5,7 +5,9 @@
     "module": "esnext",
     "paths": {
       "@/*": ["./*"]
-    }
+    },
+    "jsx": "react-native", // <-- TAMBAHKAN INI
+    "allowSyntheticDefaultImports": true // <-- TAMBAHKAN INI
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
 }

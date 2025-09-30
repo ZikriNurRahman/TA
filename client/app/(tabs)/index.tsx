@@ -1,8 +1,16 @@
-import { useEffect, useState } from "react";
-import { FlatList, Alert, Text, View, SafeAreaView } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  FlatList,
+  Alert,
+  Text,
+  View,
+  SafeAreaView,
+  TouchableOpacity,
+} from "react-native";
+import { Link, useFocusEffect } from "expo-router";
 import { DeviceCard } from "@/components/DeviceCard";
 import type { Device } from "@/types/Device";
-import { globalStyles } from "../../styles/styles";
+import { globalStyles } from "@/styles/styles";
 
 const API_URL = "http://localhost:3000";
 
@@ -51,21 +59,30 @@ export default function HomeScreen() {
     }
   };
 
-  useEffect(() => {
-    fetchDevices();
-  }, []);
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchDevices();
+    }, [])
+  );
 
   if (loading) {
     return (
-      <View style={globalStyles.loadingContainer}>
+      <SafeAreaView style={globalStyles.loadingContainer}>
         <Text>Memuat perangkat...</Text>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={globalStyles.homeContainer}>
-      <Text style={globalStyles.homeTitle}>Perangkat Smarthome</Text>
+      <View style={globalStyles.homeHeader}>
+        <Text style={globalStyles.homeTitle}>Perangkat</Text>
+        <Link href="/add-device" asChild>
+          <TouchableOpacity style={globalStyles.addButton}>
+            <Text style={globalStyles.addButtonText}>+</Text>
+          </TouchableOpacity>
+        </Link>
+      </View>
       <FlatList
         data={devices}
         keyExtractor={(item) => item.id.toString()}
