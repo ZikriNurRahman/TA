@@ -13,7 +13,7 @@ import type { Device } from "@/types/Device";
 import { idStyles } from "@/styles/styles";
 import { ConfirmModal } from "@/components/ConfirmModal";
 
-const API_URL = "http://localhost:3000";
+const API_URL = "http://10.28.185.144:3000";
 
 export default function DeviceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>(); // Mengambil ID dari URL

@@ -7,12 +7,13 @@ import {
   SafeAreaView,
   TouchableOpacity,
 } from "react-native";
-import { Link, useFocusEffect } from "expo-router";
+import { Link } from "expo-router";
 import { DeviceCard } from "@/components/DeviceCard";
 import type { Device } from "@/types/Device";
 import { homeStyles } from "@/styles/styles";
+import { io } from "socket.io-client";
 
-const API_URL = "http://localhost:3000";
+const API_URL = "http://10.28.185.144:3000";
 
 export default function HomeScreen() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -57,11 +58,31 @@ export default function HomeScreen() {
     }
   };
 
-  useFocusEffect(
-    React.useCallback(() => {
+  useEffect(() => {
+    // 2. Buat koneksi socket
+    const socket = io(API_URL);
+
+    socket.on("connect", () => {
+      console.log("🔌 Terhubung ke server socket!");
+      // Ambil data awal saat pertama kali terhubung
       fetchDevices();
-    }, [])
-  );
+    });
+
+    // 3. Dengarkan event 'devices_updated' dari server
+    socket.on("devices_updated", () => {
+      console.log("🔄 Menerima pembaruan, mengambil data baru...");
+      fetchDevices(); // Ambil ulang data setiap kali ada pembaruan
+    });
+
+    socket.on("disconnect", () => {
+      console.log("🔌 Terputus dari server socket.");
+    });
+
+    // 4. Bersihkan koneksi saat komponen di-unmount
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
   if (loading) {
     return (

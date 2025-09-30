@@ -1,8 +1,20 @@
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const app = express();
+const server = http.createServer(app);
+
+// 4. Inisialisasi Socket.IO dan atur CORS
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Izinkan semua origin, bisa diperketat nanti
+    methods: ["GET", "POST"],
+  },
+});
+
 const port = 3000;
 const MONGO_URI =
   "mongodb+srv://zikrinurrahman_ta:9pzsQvnyIVL2cI45@clusterforta.csgnuz7.mongodb.net/?retryWrites=true&w=majority&appName=clusterForTA";
@@ -55,6 +67,7 @@ app.post("/devices", async (req, res) => {
     });
 
     await newDevice.save(); // Simpan perangkat baru ke database
+    io.emit("devices_updated"); // <-- KIRIM EVENT
     console.log(`Perangkat baru ditambahkan: ${name}`);
     res.status(201).json(newDevice); // Kirim kembali data perangkat yang baru dibuat
   } catch (error) {
@@ -71,6 +84,7 @@ app.post("/devices/:id/toggle", async (req, res) => {
     if (device) {
       device.isOn = !device.isOn;
       await device.save(); // Simpan perubahan ke database
+      io.emit("devices_updated"); // <-- KIRIM EVENT
       console.log(
         `Status ${device.name} diubah menjadi ${device.isOn ? "ON" : "OFF"}`
       );
@@ -98,6 +112,7 @@ app.put("/devices/:id", async (req, res) => {
     );
 
     if (device) {
+      io.emit("devices_updated"); // <-- KIRIM EVENT
       console.log(`Perangkat diperbarui: ${device.name}`);
       res.json(device);
     } else {
@@ -128,6 +143,7 @@ app.delete("/devices/:id", async (req, res) => {
     const device = await Device.findByIdAndDelete(req.params.id);
 
     if (device) {
+      io.emit("devices_updated"); // <-- KIRIM EVENT
       console.log(`Perangkat dihapus: ${device.name}`);
       // Mengirim konfirmasi kembali ke client
       res.status(200).json({ message: "Perangkat berhasil dihapus" });
@@ -137,6 +153,14 @@ app.delete("/devices/:id", async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: "Gagal menghapus perangkat", error });
   }
+});
+
+// Logika koneksi Socket.IO
+io.on("connection", (socket) => {
+  console.log("⚡️ Seorang client telah terhubung");
+  socket.on("disconnect", () => {
+    console.log("🔌 Seorang client telah terputus");
+  });
 });
 
 // Fungsi untuk terhubung ke DB dan menjalankan server
@@ -156,7 +180,7 @@ const startServer = async () => {
       console.log("Data awal berhasil ditambahkan ke MongoDB.");
     }
 
-    app.listen(port, () => {
+    server.listen(port, () => {
       console.log(`Server Smarthome berjalan di http://localhost:${port}`);
     });
   } catch (error) {

@@ -2,9 +2,9 @@ import { useState } from "react";
 import { View, Text, TextInput, Button, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { globalStyles } from "@/styles/styles";
+import { addDeviceStyles } from "@/styles/styles";
 
-const API_URL = "http://localhost:3000"; // Sesuaikan dengan IP Anda jika perlu
+const API_URL = "http://10.28.185.144:3000"; // Sesuaikan dengan IP Anda jika perlu
 
 export default function AddDeviceScreen() {
   const [name, setName] = useState("");
@@ -39,16 +39,16 @@ export default function AddDeviceScreen() {
   };
 
   return (
-    <SafeAreaView style={globalStyles.addDeviceContainer}>
-      <Text style={globalStyles.addDeviceTitle}>Tambah Perangkat Baru</Text>
+    <SafeAreaView style={addDeviceStyles.container}>
+      <Text style={addDeviceStyles.title}>Tambah Perangkat Baru</Text>
       <TextInput
-        style={globalStyles.addDeviceInput}
+        style={addDeviceStyles.input}
         placeholder="Nama Perangkat (misal: Lampu Dapur)"
         value={name}
         onChangeText={setName}
       />
       <TextInput
-        style={globalStyles.addDeviceInput}
+        style={addDeviceStyles.input}
         placeholder="Tipe Perangkat (misal: light atau fan)"
         value={type}
         onChangeText={setType}
