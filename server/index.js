@@ -83,6 +83,20 @@ app.post("/devices/:id/toggle", async (req, res) => {
   }
 });
 
+// Endpoint untuk mendapatkan satu perangkat berdasarkan ID
+app.get("/devices/:id", async (req, res) => {
+  try {
+    const device = await Device.findById(req.params.id);
+    if (device) {
+      res.json(device);
+    } else {
+      res.status(404).json({ message: "Perangkat tidak ditemukan" });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Gagal mengambil data perangkat", error });
+  }
+});
+
 // Fungsi untuk terhubung ke DB dan menjalankan server
 const startServer = async () => {
   try {

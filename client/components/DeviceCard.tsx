@@ -1,7 +1,8 @@
 import React from "react";
-import { Switch, Text, View } from "react-native";
+import { Switch, Text, View, TouchableOpacity } from "react-native";
 import { Device } from "@/types/Device";
-import { globalStyles, dynamicCardStyles } from "@/styles/styles"; // <-- Import
+import { globalStyles, dynamicCardStyles } from "@/styles/styles";
+import { useRouter } from "expo-router";
 
 type DeviceCardProps = {
   device: Device;
@@ -9,17 +10,26 @@ type DeviceCardProps = {
 };
 
 export function DeviceCard({ device, onToggle }: DeviceCardProps) {
+  const router = useRouter();
   const icon = device.type === "light" ? "💡" : "💨";
-
-  // Pilih style dinamis berdasarkan status 'isOn'
   const styles = device.isOn ? dynamicCardStyles.on : dynamicCardStyles.off;
 
+  // Fungsi untuk menangani navigasi
+  const handleNavigation = () => {
+    router.push({
+      pathname: "/devices/[id]",
+      params: { id: device._id },
+    });
+  };
+
   return (
-    <View
+    <TouchableOpacity
       style={[
         globalStyles.deviceCard,
         { backgroundColor: styles.backgroundColor },
       ]}
+      onPress={handleNavigation} // Navigasi saat kartu ditekan
+      activeOpacity={0.8}
     >
       <Text style={globalStyles.deviceIcon}>{icon}</Text>
       <View style={globalStyles.deviceTextContainer}>
@@ -35,9 +45,10 @@ export function DeviceCard({ device, onToggle }: DeviceCardProps) {
       <Switch
         trackColor={{ false: "#767577", true: "#81b0ff" }}
         thumbColor={device.isOn ? "#f5dd4b" : "#f4f3f4"}
+        // Gunakan onValueChange yang benar dan panggil fungsi onToggle
         onValueChange={onToggle}
         value={device.isOn}
       />
-    </View>
+    </TouchableOpacity>
   );
 }
