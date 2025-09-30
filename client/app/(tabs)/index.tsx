@@ -34,10 +34,10 @@ export default function HomeScreen() {
     }
   };
 
-  const handleToggle = async (id: number) => {
+  const handleToggle = async (id: string) => {
     setDevices((currentDevices) =>
       currentDevices.map((device) =>
-        device.id === id ? { ...device, isOn: !device.isOn } : device
+        device._id === id ? { ...device, isOn: !device.isOn } : device
       )
     );
 
@@ -53,7 +53,7 @@ export default function HomeScreen() {
       Alert.alert("Error", "Gagal menyinkronkan dengan server.");
       setDevices((currentDevices) =>
         currentDevices.map((device) =>
-          device.id === id ? { ...device, isOn: !device.isOn } : device
+          device._id === id ? { ...device, isOn: !device.isOn } : device
         )
       );
     }
@@ -85,9 +85,9 @@ export default function HomeScreen() {
       </View>
       <FlatList
         data={devices}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item) => item._id.toString()}
         renderItem={({ item }) => (
-          <DeviceCard device={item} onToggle={() => handleToggle(item.id)} />
+          <DeviceCard device={item} onToggle={() => handleToggle(item._id)} />
         )}
         contentContainerStyle={globalStyles.listContainer}
       />
