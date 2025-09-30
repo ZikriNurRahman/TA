@@ -193,3 +193,51 @@ export const confirmModalStyles = StyleSheet.create({
     width: "100%",
   },
 });
+
+// Styles untuk PerformanceScreen (performance.tsx)
+export const performanceStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+  },
+  scrollView: {
+    paddingHorizontal: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginVertical: 20,
+  },
+  subtitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  pickerContainer: {
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    backgroundColor: "#fff",
+  },
+  tableHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#ccc",
+    backgroundColor: "#eee",
+  },
+  tableHeaderText: {
+    fontWeight: "bold",
+  },
+  tableRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+});

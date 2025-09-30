@@ -33,6 +33,19 @@ const deviceSchema = new mongoose.Schema({
 // 2. Buat Model dari Schema
 const Device = mongoose.model("Device", deviceSchema);
 
+// Schema untuk menyimpan data performa
+const performanceLogSchema = new mongoose.Schema({
+  deviceId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Device",
+    required: true,
+  },
+  delay: { type: Number, required: true }, // Delay dalam milidetik (ms)
+  timestamp: { type: Date, default: Date.now },
+});
+
+const PerformanceLog = mongoose.model("PerformanceLog", performanceLogSchema);
+
 // Ketika aplikasi client mengakses alamat ini, server akan merespons.
 app.get("/", (req, res) => {
   res.send("Halo, ini adalah server untuk aplikasi Smarthome!");
@@ -155,9 +168,45 @@ app.delete("/devices/:id", async (req, res) => {
   }
 });
 
+// Endpoint untuk menyimpan data log performa baru
+app.post("/logs", async (req, res) => {
+  try {
+    const { deviceId, delay } = req.body;
+    if (deviceId == null || delay == null) {
+      return res
+        .status(400)
+        .json({ message: "deviceId and delay are required" });
+    }
+    const log = new PerformanceLog({ deviceId, delay });
+    await log.save();
+    res.status(201).json(log);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to save performance log", error });
+  }
+});
+
+// Endpoint untuk mengambil semua log performa untuk satu perangkat
+app.get("/devices/:id/logs", async (req, res) => {
+  try {
+    const logs = await PerformanceLog.find({ deviceId: req.params.id })
+      .sort({ timestamp: -1 })
+      .limit(50);
+    res.json(logs);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch performance logs", error });
+  }
+});
+
 // Logika koneksi Socket.IO
 io.on("connection", (socket) => {
   console.log("⚡️ Seorang client telah terhubung");
+
+  // listener untuk event 'ping'
+  socket.on("ping", (callback) => {
+    callback(); // Langsung panggil callback untuk dihitung oleh client
+  });
   socket.on("disconnect", () => {
     console.log("🔌 Seorang client telah terputus");
   });
