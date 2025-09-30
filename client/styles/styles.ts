@@ -215,6 +215,37 @@ export const performanceStyles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 10,
   },
+  separator: {
+    height: 1,
+    backgroundColor: "#ddd",
+    marginVertical: 30,
+  },
+  button: {
+    backgroundColor: Colors.light.tint,
+    padding: 15,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  buttonDisabled: {
+    backgroundColor: "#aaa",
+  },
+  buttonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  resultContainer: {
+    marginTop: 20,
+    padding: 15,
+    backgroundColor: "#e0f7fa",
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  resultText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: Colors.light.tint,
+  },
   pickerContainer: {
     marginBottom: 20,
     borderWidth: 1,

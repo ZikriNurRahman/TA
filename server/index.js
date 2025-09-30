@@ -207,6 +207,24 @@ io.on("connection", (socket) => {
   socket.on("ping", (callback) => {
     callback(); // Langsung panggil callback untuk dihitung oleh client
   });
+
+  socket.on("toggle_device", async (deviceId, callback) => {
+    try {
+      const device = await Device.findById(deviceId);
+      if (device) {
+        device.isOn = !device.isOn;
+        await device.save();
+        // Kirim event update ke semua client
+        io.emit("devices_updated");
+        // Kirim balasan (acknowledgement) bahwa perintah sukses
+        callback({ success: true, device });
+      } else {
+        callback({ success: false, message: "Device not found" });
+      }
+    } catch (error) {
+      callback({ success: false, message: "Server error" });
+    }
+  });
   socket.on("disconnect", () => {
     console.log("🔌 Seorang client telah terputus");
   });

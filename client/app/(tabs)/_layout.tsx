@@ -41,7 +41,7 @@ export default function TabLayout() {
         options={{
           title: "Performance Log",
           tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="paintbrush" color={color} />
+            <IconSymbol size={28} name="house.fill" color={color} />
           ),
         }}
       />

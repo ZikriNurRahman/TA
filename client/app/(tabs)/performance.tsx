@@ -7,6 +7,8 @@ import {
   Dimensions,
   ScrollView,
   Alert,
+  Pressable,
+  ActivityIndicator,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { LineChart } from "react-native-chart-kit";
@@ -29,6 +31,8 @@ export default function PerformanceScreen() {
   const [testInterval, setTestInterval] = useState<
     NodeJS.Timeout | number | null
   >(null);
+  const [isThroughputTesting, setIsThroughputTesting] = useState(false);
+  const [throughputResult, setThroughputResult] = useState(0); // Hasil dalam "perintah per detik"
 
   // Fetch semua perangkat untuk ditampilkan di dropdown
   useEffect(() => {
@@ -122,6 +126,50 @@ export default function PerformanceScreen() {
     ],
   };
 
+  const startThroughputTest = () => {
+    if (!selectedDevice) {
+      Alert.alert(
+        "Pilih Perangkat",
+        "Silakan pilih perangkat terlebih dahulu."
+      );
+      return;
+    }
+    setIsThroughputTesting(true);
+    setThroughputResult(0);
+
+    let commandsSent = 0;
+    let commandsAcknowledged = 0;
+    const testDuration = 5000; // Uji coba selama 5 detik
+    const commandsPerSecond = 50; // Kirim 50 perintah per detik
+    const totalCommands = (testDuration / 1000) * commandsPerSecond;
+
+    const testInterval = setInterval(() => {
+      if (commandsSent >= totalCommands) return;
+
+      socket.emit(
+        "toggle_device",
+        selectedDevice._id,
+        (response: { success: boolean }) => {
+          if (response.success) {
+            commandsAcknowledged++;
+          }
+        }
+      );
+      commandsSent++;
+    }, 1000 / commandsPerSecond); // Interval pengiriman perintah
+
+    // Hentikan tes setelah durasi selesai
+    setTimeout(() => {
+      clearInterval(testInterval);
+      setIsThroughputTesting(false);
+      const result = commandsAcknowledged / (testDuration / 1000);
+      setThroughputResult(result);
+      console.log(
+        `Throughput Test Selesai: ${result.toFixed(2)} perintah/detik`
+      );
+    }, testDuration);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView>
@@ -150,6 +198,29 @@ export default function PerformanceScreen() {
           onPress={isTesting ? stopTesting : startTesting}
           color={isTesting ? "red" : Colors.light.tint}
         />
+
+        <View style={styles.separator} />
+        {/* --- TAMBAHKAN UI BARU DI SINI --- */}
+        <Text style={styles.subtitle}>Uji Throughput</Text>
+        <Pressable
+          style={[styles.button, isThroughputTesting && styles.buttonDisabled]}
+          onPress={startThroughputTest}
+          disabled={isThroughputTesting}
+        >
+          {isThroughputTesting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Mulai Uji Coba Throughput</Text>
+          )}
+        </Pressable>
+
+        {throughputResult > 0 && (
+          <View style={styles.resultContainer}>
+            <Text style={styles.resultText}>
+              Hasil: {throughputResult.toFixed(2)} Perintah / Detik
+            </Text>
+          </View>
+        )}
 
         <Text style={styles.subtitle}>Grafik Delay (ms)</Text>
         <LineChart
