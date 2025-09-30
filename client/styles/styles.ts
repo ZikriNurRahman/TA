@@ -122,6 +122,10 @@ export const idStyles = StyleSheet.create({
     textAlign: "center",
     color: "red",
   },
+  buttonContainer: {
+    marginTop: "auto", // Mendorong tombol ke bagian bawah layar
+    paddingTop: 20,
+  },
 });
 
 // Style dinamis untuk DeviceCard
@@ -137,3 +141,43 @@ export const dynamicCardStyles = {
     statusColor: "#666",
   },
 };
+
+// style untuk ConfirmModal.tsx
+export const confirmModalStyles = StyleSheet.create({
+  centeredView: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.5)", // Latar belakang gelap transparan
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 35,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 15,
+    textAlign: "center",
+  },
+  modalText: {
+    marginBottom: 15,
+    textAlign: "center",
+  },
+  buttonRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    width: "100%",
+  },
+});

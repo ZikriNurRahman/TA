@@ -97,6 +97,23 @@ app.get("/devices/:id", async (req, res) => {
   }
 });
 
+// Endpoint untuk menghapus perangkat berdasarkan ID
+app.delete("/devices/:id", async (req, res) => {
+  try {
+    const device = await Device.findByIdAndDelete(req.params.id);
+
+    if (device) {
+      console.log(`Perangkat dihapus: ${device.name}`);
+      // Mengirim konfirmasi kembali ke client
+      res.status(200).json({ message: "Perangkat berhasil dihapus" });
+    } else {
+      res.status(404).json({ message: "Perangkat tidak ditemukan" });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Gagal menghapus perangkat", error });
+  }
+});
+
 // Fungsi untuk terhubung ke DB dan menjalankan server
 const startServer = async () => {
   try {
