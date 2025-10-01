@@ -3,8 +3,7 @@ import { View, Text, TextInput, Button, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { addDeviceStyles } from "@/styles/styles";
-
-const API_URL = "http://10.28.185.144:3000"; // Sesuaikan dengan IP Anda jika perlu
+const API_URL = "http://10.28.185.144:3000";
 
 export default function AddDeviceScreen() {
   const [name, setName] = useState("");

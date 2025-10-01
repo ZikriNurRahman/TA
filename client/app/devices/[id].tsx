@@ -12,8 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { Device } from "@/types/Device";
 import { idStyles } from "@/styles/styles";
 import { ConfirmModal } from "@/components/ConfirmModal";
-
-const API_URL = "http://10.28.185.144:3000";
+import { API_URL } from "@/constants/api";
 
 export default function DeviceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>(); // Mengambil ID dari URL

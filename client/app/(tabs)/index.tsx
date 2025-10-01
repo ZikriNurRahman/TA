@@ -12,8 +12,7 @@ import { DeviceCard } from "@/components/DeviceCard";
 import type { Device } from "@/types/Device";
 import { homeStyles } from "@/styles/styles";
 import { io } from "socket.io-client";
-
-const API_URL = "http://10.28.185.144:3000";
+import { API_URL } from "@/constants/api";
 
 export default function HomeScreen() {
   const [devices, setDevices] = useState<Device[]>([]);
