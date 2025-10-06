@@ -1,39 +1,114 @@
-import { Text, View } from "react-native";
-import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
-import { useEffect, useState, useMemo } from "react";
-import { createStyles } from "../../styles/styles";
+import React, { useEffect, useState } from "react";
+import {
+  FlatList,
+  Alert,
+  Text,
+  View,
+  SafeAreaView,
+  TouchableOpacity,
+} from "react-native";
+import { Link } from "expo-router";
+import { DeviceCard } from "@/components/DeviceCard";
+import type { Device } from "@/types/Device";
+import { homeStyles } from "@/styles/styles";
+import { io } from "socket.io-client";
+import { API_URL } from "@/constants/api";
 
 export default function HomeScreen() {
-  // State untuk menyimpan pesan dari server
-  const [serverMessage, setServerMessage] = useState("Sedang memuat...");
+  const [devices, setDevices] = useState<Device[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDevices = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`${API_URL}/devices`);
+      const data: Device[] = await response.json();
+      setDevices(data);
+    } catch (error) {
+      console.error("Gagal mengambil data perangkat:", error);
+      Alert.alert("Error", "Tidak dapat terhubung ke server.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggle = async (id: string) => {
+    setDevices((currentDevices) =>
+      currentDevices.map((device) =>
+        device._id === id ? { ...device, isOn: !device.isOn } : device
+      )
+    );
+
+    try {
+      const response = await fetch(`${API_URL}/devices/${id}/toggle`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error("Gagal mengubah status perangkat di server.");
+      }
+    } catch (error) {
+      console.error("Error saat toggle:", error);
+      Alert.alert("Error", "Gagal menyinkronkan dengan server.");
+      setDevices((currentDevices) =>
+        currentDevices.map((device) =>
+          device._id === id ? { ...device, isOn: !device.isOn } : device
+        )
+      );
+    }
+  };
 
   useEffect(() => {
-    // Fungsi untuk mengambil data dari server
-    const fetchData = async () => {
-      try {
-        // Ganti 'localhost' dengan alamat IP komputer Anda jika menjalankan di perangkat fisik
-        const response = await fetch("http://localhost:3000/");
-        const data = await response.text();
-        setServerMessage(data);
-      } catch (error) {
-        console.error("Gagal terhubung ke server:", error);
-        setServerMessage("Gagal terhubung ke server.");
-      }
+    // 2. Buat koneksi socket
+    const socket = io(API_URL);
+
+    socket.on("connect", () => {
+      console.log("🔌 Terhubung ke server socket!");
+      // Ambil data awal saat pertama kali terhubung
+      fetchDevices();
+    });
+
+    // 3. Dengarkan event 'devices_updated' dari server
+    socket.on("devices_updated", () => {
+      console.log("🔄 Menerima pembaruan, mengambil data baru...");
+      fetchDevices(); // Ambil ulang data setiap kali ada pembaruan
+    });
+
+    socket.on("disconnect", () => {
+      console.log("🔌 Terputus dari server socket.");
+    });
+
+    // 4. Bersihkan koneksi saat komponen di-unmount
+    return () => {
+      socket.disconnect();
     };
+  }, []);
 
-    fetchData();
-  }, []); // Array kosong berarti efek ini hanya berjalan sekali saat komponen dimuat
-
-  const styles = useMemo(() => createStyles(), []);
+  if (loading) {
+    return (
+      <SafeAreaView style={homeStyles.loadingContainer}>
+        <Text>Memuat perangkat...</Text>
+      </SafeAreaView>
+    );
+  }
 
   return (
-    <ThemedView style={styles.container}>
-      <ThemedText type="title">Selamat Datang!</ThemedText>
-      <View style={styles.messageContainer}>
-        <Text>Pesan dari server:</Text>
-        <ThemedText type="defaultSemiBold">{serverMessage}</ThemedText>
+    <SafeAreaView style={homeStyles.container}>
+      <View style={homeStyles.header}>
+        <Text style={homeStyles.title}>Perangkat</Text>
+        <Link href="/add-device" asChild>
+          <TouchableOpacity style={homeStyles.addButton}>
+            <Text style={homeStyles.addButtonText}>+</Text>
+          </TouchableOpacity>
+        </Link>
       </View>
-    </ThemedView>
+      <FlatList
+        data={devices}
+        keyExtractor={(item) => item._id.toString()}
+        renderItem={({ item }) => (
+          <DeviceCard device={item} onToggle={() => handleToggle(item._id)} />
+        )}
+        contentContainerStyle={homeStyles.listContainer}
+      />
+    </SafeAreaView>
   );
 }
