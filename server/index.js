@@ -15,7 +15,7 @@ const io = new Server(server, {
   },
 });
 
-const port = 3000;
+const port = process.env.PORT || 3000;
 const MONGO_URI =
   "mongodb+srv://zikrinurrahman_ta:9pzsQvnyIVL2cI45@clusterforta.csgnuz7.mongodb.net/?retryWrites=true&w=majority&appName=clusterForTA";
 

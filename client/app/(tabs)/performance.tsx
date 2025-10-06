@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -31,7 +31,7 @@ export default function PerformanceScreen() {
     NodeJS.Timeout | number | null
   >(null);
   const [isThroughputTesting, setIsThroughputTesting] = useState(false);
-  const [throughputResult, setThroughputResult] = useState(0); // Hasil dalam "perintah per detik"
+  const [throughputResult, setThroughputResult] = useState(0);
 
   // Fetch semua perangkat untuk ditampilkan di dropdown
   useEffect(() => {
@@ -53,7 +53,7 @@ export default function PerformanceScreen() {
     socket = io(API_URL);
     return () => {
       socket.disconnect();
-      if (testInterval) clearInterval(testInterval);
+      if (testInterval) clearInterval(testInterval as NodeJS.Timeout);
     };
   }, []);
 
@@ -80,7 +80,7 @@ export default function PerformanceScreen() {
     const startTime = Date.now();
     socket.emit("ping", () => {
       const delay = Date.now() - startTime;
-      console.log(`Ping untuk ${selectedDevice.name}: ${delay}ms`);
+      console.log(`Ping untuk ${selectedDevice.name}: ${delay} ms`);
 
       // Simpan log ke database
       saveLog(selectedDevice._id, delay);
@@ -158,115 +158,112 @@ export default function PerformanceScreen() {
     }, testDuration);
   };
 
-  // Tentukan lebar minimum grafik (lebar layar)
-  const screenWidth = Dimensions.get("window").width;
-  // Tentukan lebar dinamis berdasarkan jumlah data. Beri 60 piksel untuk setiap titik data.
-  const chartWidth = logs.length > 5 ? logs.length * 100 : screenWidth - 32;
-
-  const chartData = {
-    labels: logs
-      .map((log) => new Date(log.timestamp).toLocaleTimeString())
-      .reverse(),
-    datasets: [
-      {
-        data: logs.length > 0 ? logs.map((log) => log.delay).reverse() : [0],
-      },
-    ],
-  };
   // Komponen Header untuk FlatList
-  const ListHeader = () => (
-    <>
-      <Text style={styles.title}>Uji Performa Jaringan</Text>
+  const ListHeader = () => {
+    const screenWidth = Dimensions.get("window").width;
+    const chartWidth = logs.length > 5 ? logs.length * 60 : screenWidth - 32;
 
-      <View style={styles.pickerContainer}>
-        <Picker
-          selectedValue={selectedDevice?._id}
-          onValueChange={(itemValue) => {
-            const device = devices.find((d) => d._id === itemValue);
-            setSelectedDevice(device || null);
-          }}
-        >
-          {devices.map((device) => (
-            <Picker.Item
-              key={device._id}
-              label={device.name}
-              value={device._id}
-            />
-          ))}
-        </Picker>
-      </View>
+    const chartData = {
+      labels: logs
+        .map((log) => new Date(log.timestamp).toLocaleTimeString())
+        .reverse(),
+      datasets: [
+        {
+          data: logs.length > 0 ? logs.map((log) => log.delay).reverse() : [0],
+        },
+      ],
+    };
 
-      <Button
-        title={isDelayTesting ? "Hentikan Uji Coba" : "Mulai Uji Coba Delay"}
-        onPress={isDelayTesting ? stopDelayTest : startDelayTest}
-        color={isDelayTesting ? "red" : Colors.light.tint}
-      />
+    const maxDelay =
+      logs.length > 0 ? Math.max(...logs.map((log) => log.delay)) : 0;
+    let yAxisSegmentCount;
+    if (maxDelay <= 6) {
+      yAxisSegmentCount = Math.ceil(maxDelay) || 1;
+    } else {
+      yAxisSegmentCount = 5;
+    }
 
-      <Text style={styles.subtitle}>Grafik Delay (ms)</Text>
-      <ScrollView horizontal={true}>
-        {logs.length > 0 ? (
-          <LineChart
-            data={chartData}
-            width={chartWidth} // Gunakan lebar dinamis
-            height={400}
-            yAxisSuffix=" ms"
-            fromZero={true}
-            segments={5}
-            chartConfig={{
-              backgroundColor: "#e26a00",
-              backgroundGradientFrom: "#fb8c00",
-              backgroundGradientTo: "#ffa726",
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-              style: { borderRadius: 16 },
-              propsForLabels: {
-                // Tambahkan rotasi agar tidak bertabrakan
-                rotation: -45,
-                fontSize: 10,
-                dx: -10,
-                dy: 10,
-              },
+    return (
+      <>
+        <Text style={styles.title}>Uji Performa Jaringan</Text>
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={selectedDevice?._id}
+            onValueChange={(itemValue) => {
+              const device = devices.find((d) => d._id === itemValue);
+              setSelectedDevice(device || null);
             }}
-            bezier
-            style={{ marginVertical: 8, borderRadius: 16 }}
-          />
-        ) : (
-          <Text style={{ textAlign: "center", padding: 20 }}>
-            Belum ada data untuk ditampilkan.
-          </Text>
-        )}
-      </ScrollView>
-
-      <View style={styles.separator} />
-
-      <Text style={styles.subtitle}>Uji Throughput</Text>
-      <Pressable
-        style={[styles.button, isThroughputTesting && styles.buttonDisabled]}
-        onPress={startThroughputTest}
-        disabled={isThroughputTesting}
-      >
-        {isThroughputTesting ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Mulai Uji Coba Throughput</Text>
-        )}
-      </Pressable>
-
-      {throughputResult > 0 && (
-        <View style={styles.resultContainer}>
-          <Text style={styles.resultText}>
-            Hasil: {throughputResult.toFixed(2)} Perintah / Detik
-          </Text>
+          >
+            {devices.map((device) => (
+              <Picker.Item
+                key={device._id}
+                label={device.name}
+                value={device._id}
+              />
+            ))}
+          </Picker>
         </View>
-      )}
-
-      <Text style={styles.subtitle}>Tabel Log</Text>
-      <View style={styles.tableHeader}>
-        <Text style={styles.tableHeaderText}>Waktu</Text>
-        <Text style={styles.tableHeaderText}>Delay (ms)</Text>
-      </View>
-    </>
-  );
+        <Button
+          title={isDelayTesting ? "Hentikan Uji Coba" : "Mulai Uji Coba Delay"}
+          onPress={isDelayTesting ? stopDelayTest : startDelayTest}
+          color={isDelayTesting ? "red" : Colors.light.tint}
+        />
+        <Text style={styles.subtitle}>Grafik Delay (ms)</Text>
+        <ScrollView horizontal={true}>
+          {logs.length > 0 ? (
+            <LineChart
+              data={chartData}
+              width={chartWidth}
+              height={220}
+              yAxisSuffix=" ms"
+              fromZero={true}
+              segments={yAxisSegmentCount}
+              chartConfig={{
+                backgroundColor: "#e26a00",
+                backgroundGradientFrom: "#fb8c00",
+                backgroundGradientTo: "#ffa726",
+                decimalPlaces: 0,
+                color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                style: { borderRadius: 16 },
+                // formatYLabel={(yValue) => Math.round(Number(yValue)).toString()}
+              }}
+              bezier
+              style={{ marginVertical: 8, borderRadius: 16 }}
+            />
+          ) : (
+            <Text style={{ textAlign: "center", padding: 20 }}>
+              Jalankan tes untuk melihat grafik.
+            </Text>
+          )}
+        </ScrollView>
+        <View style={styles.separator} />
+        <Text style={styles.subtitle}>Uji Throughput</Text>
+        <Pressable
+          style={[styles.button, isThroughputTesting && styles.buttonDisabled]}
+          onPress={startThroughputTest}
+          disabled={isThroughputTesting}
+        >
+          {isThroughputTesting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Mulai Uji Coba Throughput</Text>
+          )}
+        </Pressable>
+        {throughputResult > 0 && (
+          <View style={styles.resultContainer}>
+            <Text style={styles.resultText}>
+              Hasil: {throughputResult.toFixed(2)} Perintah / Detik
+            </Text>
+          </View>
+        )}
+        <Text style={styles.subtitle}>Tabel Log</Text>
+        <View style={styles.tableHeader}>
+          <Text style={styles.tableHeaderText}>Waktu</Text>
+          <Text style={styles.tableHeaderText}>Delay (ms)</Text>
+        </View>
+      </>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
