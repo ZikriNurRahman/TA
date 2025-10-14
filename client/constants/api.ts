@@ -3,19 +3,26 @@ import { Platform } from "react-native";
 
 let apiUrl: string;
 
-// Cek apakah kode berjalan di lingkungan web
-if (Platform.OS === "web") {
-  // Untuk web, gunakan hostname dari URL browser.
-  apiUrl = `http://${window.location.hostname}:3000`;
-} else {
-  // Untuk mobile (iOS/Android), gunakan metode hostUri dari Expo Constants.
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
-    apiUrl = `http://${hostUri.split(":")[0]}:3000`;
+// `process.env.NODE_ENV` akan bernilai 'development' saat Anda menjalankan `npx expo start`
+// dan akan bernilai 'production' saat Anda membuat build dengan `eas build`.
+if (process.env.NODE_ENV === "development") {
+  // --- KODE UNTUK DEVELOPMENT ---
+  if (Platform.OS === "web") {
+    // Untuk web, gunakan hostname dari URL browser.
+    apiUrl = `http://${window.location.hostname}:3000`;
   } else {
-    // Fallback jika terjadi kesalahan
-    apiUrl = "http://localhost:3000";
+    // Untuk mobile (iOS/Android), gunakan metode hostUri dari Expo Constants.
+    const hostUri = Constants.expoConfig?.hostUri;
+    if (hostUri) {
+      apiUrl = `http://${hostUri.split(":")[0]}:3000`;
+    } else {
+      apiUrl = "http://localhost:3000";
+    }
   }
+} else {
+  // --- KODE UNTUK PRODUKSI ---
+  // Ambil URL dari app.json yang sudah kita set sebelumnya.
+  apiUrl = Constants.expoConfig?.extra?.apiUrl as string;
 }
 
 export const API_URL = apiUrl;
