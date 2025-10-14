@@ -185,7 +185,9 @@ export default function PerformanceScreen() {
 
     return (
       <>
-        <Text style={styles.title}>Uji Performa Jaringan</Text>
+        <Text style={styles.title}>Performance</Text>
+
+        {/* pilih device */}
         <View style={styles.pickerContainer}>
           <Picker
             selectedValue={selectedDevice?._id}
@@ -203,18 +205,48 @@ export default function PerformanceScreen() {
             ))}
           </Picker>
         </View>
+
+        {/* throughput test */}
+        <Text style={styles.subtitle}>Throughput Test</Text>
+        <Pressable
+          style={[styles.button, isThroughputTesting && styles.buttonDisabled]}
+          onPress={startThroughputTest}
+          disabled={isThroughputTesting}
+        >
+          {isThroughputTesting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Start Throughput Test</Text>
+          )}
+        </Pressable>
+        {throughputResult > 0 && (
+          <View style={styles.resultContainer}>
+            <Text style={styles.resultText}>
+              Hasil: {throughputResult.toFixed(2)} Perintah / Detik
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.separator} />
+
+        {/* delay test */}
+        <Text style={styles.subtitle}>Delay Test</Text>
+
+        {/* tombol mulai */}
         <Button
-          title={isDelayTesting ? "Hentikan Uji Coba" : "Mulai Uji Coba Delay"}
+          title={isDelayTesting ? "Stop Delay Test" : "Start Delay Test"}
           onPress={isDelayTesting ? stopDelayTest : startDelayTest}
           color={isDelayTesting ? "red" : Colors.light.tint}
         />
-        <Text style={styles.subtitle}>Grafik Delay (ms)</Text>
+
+        {/* grafik delay test */}
+        <Text style={styles.subtitle}>Delay Graphic (ms)</Text>
         <ScrollView horizontal={true}>
           {logs.length > 0 ? (
             <LineChart
               data={chartData}
               width={chartWidth}
-              height={220}
+              height={300}
               yAxisSuffix=" ms"
               fromZero={true}
               segments={yAxisSegmentCount}
@@ -226,6 +258,13 @@ export default function PerformanceScreen() {
                 color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
                 style: { borderRadius: 16 },
                 // formatYLabel={(yValue) => Math.round(Number(yValue)).toString()}
+                propsForLabels: {
+                  // Tambahkan rotasi agar tidak bertabrakan
+                  rotation: -45,
+                  fontSize: 10,
+                  dx: -10,
+                  dy: 10,
+                },
               }}
               bezier
               style={{ marginVertical: 8, borderRadius: 16 }}
@@ -236,26 +275,10 @@ export default function PerformanceScreen() {
             </Text>
           )}
         </ScrollView>
+
         <View style={styles.separator} />
-        <Text style={styles.subtitle}>Uji Throughput</Text>
-        <Pressable
-          style={[styles.button, isThroughputTesting && styles.buttonDisabled]}
-          onPress={startThroughputTest}
-          disabled={isThroughputTesting}
-        >
-          {isThroughputTesting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Mulai Uji Coba Throughput</Text>
-          )}
-        </Pressable>
-        {throughputResult > 0 && (
-          <View style={styles.resultContainer}>
-            <Text style={styles.resultText}>
-              Hasil: {throughputResult.toFixed(2)} Perintah / Detik
-            </Text>
-          </View>
-        )}
+
+        {/* tabel delay test */}
         <Text style={styles.subtitle}>Tabel Log</Text>
         <View style={styles.tableHeader}>
           <Text style={styles.tableHeaderText}>Waktu</Text>
