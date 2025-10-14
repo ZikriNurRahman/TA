@@ -20,7 +20,11 @@ const MONGO_URI =
   "mongodb+srv://zikrinurrahman_ta:9pzsQvnyIVL2cI45@clusterforta.csgnuz7.mongodb.net/?retryWrites=true&w=majority&appName=clusterForTA";
 
 // supaya bisa cross port
-app.use(cors());
+app.use(
+  cors({
+    origin: "*",
+  })
+);
 app.use(express.json());
 
 // 1. Definisi Schema (Struktur Data) dengan Mongoose
