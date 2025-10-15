@@ -3,7 +3,7 @@ import { View, Text, TextInput, Button, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { addDeviceStyles } from "@/styles/styles";
-const API_URL = "http://10.28.185.144:3000";
+import { API_URL } from "@/constants/api";
 
 export default function AddDeviceScreen() {
   const [name, setName] = useState("");
@@ -33,7 +33,7 @@ export default function AddDeviceScreen() {
       router.back(); // Kembali ke halaman utama setelah berhasil
     } catch (error) {
       console.error(error);
-      Alert.alert("Error", "Gagal terhubung ke server.");
+      Alert.alert("Error", "Gagal terhubung ke server.tes");
     }
   };
 
