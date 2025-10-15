@@ -37,13 +37,26 @@ const deviceSchema = new mongoose.Schema({
 // 2. Buat Model dari Schema
 const Device = mongoose.model("Device", deviceSchema);
 
-// Schema untuk menyimpan data performa
-const performanceLogSchema = new mongoose.Schema({
+// SKEMA BARU: Untuk menyimpan informasi setiap sesi percobaan
+const testSessionSchema = new mongoose.Schema({
   deviceId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Device",
     required: true,
   },
+  startTime: { type: Date, default: Date.now },
+  // Kita bisa menambahkan data lain nanti, misal hasil throughput
+});
+const TestSession = mongoose.model("TestSession", testSessionSchema);
+
+// Schema untuk menyimpan data performa
+const performanceLogSchema = new mongoose.Schema({
+  sessionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "TestSession",
+    required: true,
+  },
+
   delay: { type: Number, required: true }, // Delay dalam milidetik (ms)
   timestamp: { type: Date, default: Date.now },
 });
@@ -172,23 +185,6 @@ app.delete("/devices/:id", async (req, res) => {
   }
 });
 
-// Endpoint untuk menyimpan data log performa baru
-app.post("/logs", async (req, res) => {
-  try {
-    const { deviceId, delay } = req.body;
-    if (deviceId == null || delay == null) {
-      return res
-        .status(400)
-        .json({ message: "deviceId and delay are required" });
-    }
-    const log = new PerformanceLog({ deviceId, delay });
-    await log.save();
-    res.status(201).json(log);
-  } catch (error) {
-    res.status(500).json({ message: "Failed to save performance log", error });
-  }
-});
-
 // Endpoint untuk mengambil semua log performa untuk satu perangkat
 app.get("/devices/:id/logs", async (req, res) => {
   try {
@@ -200,6 +196,68 @@ app.get("/devices/:id/logs", async (req, res) => {
     res
       .status(500)
       .json({ message: "Failed to fetch performance logs", error });
+  }
+});
+
+// 1. Endpoint untuk membuat sesi tes baru
+app.post("/sessions", async (req, res) => {
+  try {
+    const { deviceId } = req.body;
+    if (!deviceId) {
+      return res.status(400).json({ message: "deviceId is required" });
+    }
+    const session = new TestSession({ deviceId });
+    await session.save();
+    res.status(201).json(session);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to create session", error });
+  }
+});
+
+// 2. Endpoint untuk mendapatkan semua riwayat sesi untuk satu perangkat
+app.get("/devices/:deviceId/sessions", async (req, res) => {
+  try {
+    const sessions = await TestSession.find({
+      deviceId: req.params.deviceId,
+    }).sort({ startTime: -1 });
+    res.json(sessions);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch sessions", error });
+  }
+});
+
+// 3. Endpoint untuk menyimpan log performa baru untuk sebuah sesi
+app.post("/logs", async (req, res) => {
+  try {
+    const { sessionId, delay } = req.body;
+    if (!sessionId || delay == null) {
+      return res
+        .status(400)
+        .json({ message: "sessionId and delay are required" });
+    }
+    const log = new PerformanceLog({ sessionId, delay });
+    await log.save();
+
+    // Kirim sinyal update log ke client melalui socket
+    io.emit("log_updated", { sessionId });
+
+    res.status(201).json(log);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to save performance log", error });
+  }
+});
+
+// 4. Endpoint untuk mendapatkan semua log untuk satu sesi tertentu
+app.get("/sessions/:sessionId/logs", async (req, res) => {
+  try {
+    const logs = await PerformanceLog.find({
+      sessionId: req.params.sessionId,
+    }).sort({ timestamp: "asc" });
+    res.json(logs);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Failed to fetch logs for session", error });
   }
 });
 
