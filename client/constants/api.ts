@@ -1,35 +1,30 @@
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 
-// Fungsi untuk mendapatkan alamat IP lokal dari manifest Expo
-const getLocalIp = () => {
-  // Ambil host URI dari manifest. Ini adalah alamat server development.
-  // Contoh: '192.168.1.5:8081'
-  const hostUri = Constants.expoConfig?.hostUri;
+let apiUrl: string;
 
-  if (hostUri) {
-    return hostUri.split(":")[0];
-  }
-  return null;
-};
-
-// Logika untuk menentukan URL API
-let apiUrl = "http://localhost:3000"; // Default untuk web
-
-if (Platform.OS !== "web") {
-  const localIp = getLocalIp();
-  if (localIp) {
-    apiUrl = `http://${localIp}:3000`;
+// `process.env.NODE_ENV` akan bernilai 'development' saat Anda menjalankan `npx expo start`
+// dan akan bernilai 'production' saat Anda membuat build dengan `eas build`.
+if (process.env.NODE_ENV === "development") {
+  // --- KODE UNTUK DEVELOPMENT ---
+  if (Platform.OS === "web") {
+    // Untuk web, gunakan hostname dari URL browser.
+    apiUrl = `http://${window.location.hostname}:3000`;
   } else {
-    // Fallback jika IP tidak terdeteksi
-    console.warn(
-      "Could not detect local IP address for API connection. Please ensure you are running in a development environment."
-    );
-    // Anda bisa set IP manual di sini jika diperlukan untuk situasi darurat
-    // apiUrl = 'http://192.168.1.YOUR_IP:3000';
+    // Untuk mobile (iOS/Android), gunakan metode hostUri dari Expo Constants.
+    const hostUri = Constants.expoConfig?.hostUri;
+    if (hostUri) {
+      apiUrl = `http://${hostUri.split(":")[0]}:3000`;
+    } else {
+      apiUrl = "http://localhost:3000";
+    }
   }
+} else {
+  // --- KODE UNTUK PRODUKSI ---
+  // Ambil URL dari app.json yang sudah kita set sebelumnya.
+  apiUrl = Constants.expoConfig?.extra?.apiUrl as string;
 }
 
 export const API_URL = apiUrl;
 
-console.log("API URL is set to:", API_URL);
+console.log(`Platform: ${Platform.OS}, API URL is set to: ${API_URL}`);

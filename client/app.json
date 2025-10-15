@@ -16,7 +16,8 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.zikrinurrahman.iotonlinecontroller"
     },
     "web": {
       "bundler": "metro",
@@ -37,6 +38,13 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "apiUrl": "https://iot-online-controller-by-zikri.onrender.com",
+      "router": {},
+      "eas": {
+        "projectId": "305a5a3a-f930-4119-ac87-5d89c9b21ef0"
+      }
     }
   }
 }
