@@ -58,7 +58,6 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    Alert.alert("API URL Check", `Currently using: ${API_URL}`);
     // 2. Buat koneksi socket
     const socket = io(API_URL);
 

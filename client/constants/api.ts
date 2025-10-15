@@ -8,8 +8,14 @@ let apiUrl: string;
 if (process.env.NODE_ENV === "development") {
   // --- KODE UNTUK DEVELOPMENT ---
   if (Platform.OS === "web") {
-    // Untuk web, gunakan hostname dari URL browser.
-    apiUrl = `http://${window.location.hostname}:3000`;
+    // Cek apakah 'window' ada sebelum digunakan
+    if (typeof window !== "undefined") {
+      // Kode ini hanya akan berjalan di browser
+      apiUrl = `http://${window.location.hostname}:3000`;
+    } else {
+      // Fallback untuk lingkungan build (Node.js)
+      apiUrl = "http://localhost:3000";
+    }
   } else {
     // Untuk mobile (iOS/Android), gunakan metode hostUri dari Expo Constants.
     const hostUri = Constants.expoConfig?.hostUri;
@@ -21,7 +27,7 @@ if (process.env.NODE_ENV === "development") {
   }
 } else {
   // --- KODE UNTUK PRODUKSI ---
-  // Ambil URL dari app.json yang sudah kita set sebelumnya.
+  // Ambil URL dari app.json
   apiUrl = Constants.expoConfig?.extra?.apiUrl as string;
 }
 
