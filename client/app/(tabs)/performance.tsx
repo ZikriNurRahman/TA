@@ -185,7 +185,7 @@ export default function PerformanceScreen() {
 
     return (
       <>
-        <Text style={styles.title}>Performance</Text>
+        <Text style={styles.title}>tes Performance</Text>
 
         {/* pilih device */}
         <View style={styles.pickerContainer}>
