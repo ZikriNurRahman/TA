@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,13 +9,18 @@ import {
   Alert,
   Pressable,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { LineChart } from "react-native-chart-kit";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { io, Socket } from "socket.io-client";
+
 import { Device } from "@/types/Device";
 import { PerformanceLog } from "@/types/PerformanceLog";
+import { TestSession } from "@/types/TestSession";
+import { ThroughputLog } from "@/types/ThroughputLog";
+
 import { performanceStyles as styles } from "@/styles/styles";
 import { Colors } from "@/constants/Colors";
 import { API_URL } from "@/constants/api";
@@ -23,15 +28,31 @@ import { API_URL } from "@/constants/api";
 let socket: Socket;
 
 export default function PerformanceScreen() {
+  // State untuk data utama
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
+
+  // State untuk riwayat dan sesi
+  const [sessions, setSessions] = useState<TestSession[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    null
+  );
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+
+  // State untuk Log Delay & Status
   const [logs, setLogs] = useState<PerformanceLog[]>([]);
   const [isDelayTesting, setIsDelayTesting] = useState(false);
-  const [testInterval, setTestInterval] = useState<
+  const [delayTestInterval, setDelayTestInterval] = useState<
     NodeJS.Timeout | number | null
   >(null);
+
+  // State untuk Log Throughput & Status
   const [isThroughputTesting, setIsThroughputTesting] = useState(false);
-  const [throughputResult, setThroughputResult] = useState(0);
+  const [throughputLogs, setThroughputLogs] = useState<ThroughputLog[]>([]);
+  const [throughputPage, setThroughputPage] = useState(1);
+  const [totalThroughputPages, setTotalThroughputPages] = useState(1);
+
+  // -- FUNGSI-FUNGSI LOGIKA --
 
   // Fetch semua perangkat untuk ditampilkan di dropdown
   useEffect(() => {
@@ -51,111 +72,172 @@ export default function PerformanceScreen() {
 
     // Inisialisasi koneksi socket
     socket = io(API_URL);
+
+    // Listener untuk update log secara real-time
+    socket.on("log_updated", ({ sessionId }) => {
+      if (sessionId === selectedSessionId) {
+        fetchLogs(sessionId);
+      }
+    });
+
+    socket.on("throughput_log_updated", ({ sessionId }) => {
+      if (sessionId === selectedSessionId) fetchThroughputLogs(sessionId, 1);
+    });
+
     return () => {
       socket.disconnect();
-      if (testInterval) clearInterval(testInterval as NodeJS.Timeout);
+      if (delayTestInterval) clearInterval(delayTestInterval as NodeJS.Timeout);
     };
   }, []);
 
-  // Fetch logs setiap kali perangkat yang dipilih berubah
+  // Fetch riwayat sesi setiap kali perangkat diganti
+  const fetchSessions = useCallback(
+    async (deviceId: string) => {
+      try {
+        const response = await fetch(`${API_URL}/devices/${deviceId}/sessions`);
+        const data: TestSession[] = await response.json();
+        setSessions(data);
+        // Jika tidak ada sesi aktif, tampilkan data dari sesi terbaru
+        if (!isDelayTesting && data.length > 0) {
+          setSelectedSessionId(data[0]._id);
+        } else if (!isDelayTesting) {
+          setLogs([]); // Kosongkan log jika tidak ada riwayat
+          setThroughputLogs([]);
+        }
+      } catch (error) {
+        console.error("Gagal mengambil sesi:", error);
+      }
+    },
+    [isDelayTesting]
+  );
+
   useEffect(() => {
     if (selectedDevice) {
-      fetchLogs(selectedDevice._id);
+      fetchSessions(selectedDevice._id);
     }
-  }, [selectedDevice]);
+  }, [selectedDevice, fetchSessions]);
 
-  const fetchLogs = async (deviceId: string) => {
+  const fetchLogs = async (sessionId: string) => {
     try {
-      const response = await fetch(`${API_URL}/devices/${deviceId}/logs`);
-      const data = await response.json();
-      setLogs(data);
+      const response = await fetch(`${API_URL}/sessions/${sessionId}/logs`);
+      setLogs(await response.json());
     } catch (error) {
-      console.error("Gagal mengambil logs:", error);
+      console.error("Gagal mengambil log delay:", error);
     }
   };
 
-  const runPingTest = () => {
-    if (!selectedDevice) return;
+  const fetchThroughputLogs = async (sessionId: string, page: number) => {
+    try {
+      const response = await fetch(
+        `${API_URL}/sessions/${sessionId}/throughput-logs?page=${page}`
+      );
+      const data = await response.json();
+      setThroughputLogs(data.logs);
+      setThroughputPage(data.currentPage);
+      setTotalThroughputPages(data.totalPages);
+    } catch (error) {
+      console.error("Gagal mengambil log throughput:", error);
+    }
+  };
 
+  useEffect(() => {
+    if (selectedSessionId) {
+      fetchLogs(selectedSessionId);
+      fetchThroughputLogs(selectedSessionId, 1);
+    }
+  }, [selectedSessionId]);
+
+  const startDelayTest = async () => {
+    if (!selectedDevice) return;
+    if (delayTestInterval) clearInterval(delayTestInterval as NodeJS.Timeout);
+    setLogs([]);
+    setThroughputLogs([]);
+    try {
+      const response = await fetch(`${API_URL}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId: selectedDevice._id }),
+      });
+      const newSession: TestSession = await response.json();
+      setActiveSessionId(newSession._id);
+      setSelectedSessionId(newSession._id);
+      setIsDelayTesting(true);
+      const interval = setInterval(() => runPingTest(newSession._id), 1000);
+      setDelayTestInterval(interval);
+    } catch (error) {
+      console.error("Gagal membuat sesi:", error);
+    }
+  };
+
+  const stopDelayTest = () => {
+    if (delayTestInterval) clearInterval(delayTestInterval as NodeJS.Timeout);
+    setIsDelayTesting(false);
+    setDelayTestInterval(null);
+    setActiveSessionId(null);
+    if (selectedDevice) fetchSessions(selectedDevice._id);
+  };
+
+  const runPingTest = (currentSessionId: string) => {
     const startTime = Date.now();
     socket.emit("ping", () => {
       const delay = Date.now() - startTime;
-      console.log(`Ping untuk ${selectedDevice.name}: ${delay} ms`);
-
-      // Simpan log ke database
-      saveLog(selectedDevice._id, delay);
+      saveLog(currentSessionId, delay);
     });
   };
 
-  const saveLog = async (deviceId: string, delay: number) => {
+  const saveLog = async (sessionId: string, delay: number) => {
     try {
       await fetch(`${API_URL}/logs`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ deviceId, delay }),
+        body: JSON.stringify({ sessionId, delay }),
       });
-      // Ambil ulang data log untuk memperbarui tabel & grafik
-      fetchLogs(deviceId);
     } catch (error) {
       console.error("Gagal menyimpan log:", error);
     }
   };
 
-  const startDelayTest = () => {
-    if (testInterval) clearInterval(testInterval as NodeJS.Timeout);
-    setIsDelayTesting(true);
-    const interval = setInterval(runPingTest, 1000); // Lakukan tes setiap 1 detik
-    setTestInterval(interval);
-  };
-
-  const stopDelayTest = () => {
-    if (testInterval) clearInterval(testInterval as NodeJS.Timeout);
-    setIsDelayTesting(false);
-    setTestInterval(null);
-  };
-
   const startThroughputTest = () => {
-    if (!selectedDevice) {
+    if (!activeSessionId) {
       Alert.alert(
-        "Pilih Perangkat",
-        "Silakan pilih perangkat terlebih dahulu."
+        "Mulai Tes Delay Dahulu",
+        "Sesi tes harus aktif untuk menguji throughput."
       );
       return;
     }
     setIsThroughputTesting(true);
-    setThroughputResult(0);
-
-    let commandsSent = 0;
     let commandsAcknowledged = 0;
-    const testDuration = 5000; // Uji coba selama 5 detik
-    const commandsPerSecond = 50; // Kirim 50 perintah per detik
+    const testDuration = 5000;
+    const commandsPerSecond = 50;
     const totalCommands = (testDuration / 1000) * commandsPerSecond;
-
     const testInterval = setInterval(() => {
-      if (commandsSent >= totalCommands) return;
-
+      if (commandsAcknowledged >= totalCommands) return;
       socket.emit(
         "toggle_device",
-        selectedDevice._id,
+        selectedDevice?._id,
         (response: { success: boolean }) => {
-          if (response.success) {
-            commandsAcknowledged++;
-          }
+          if (response.success) commandsAcknowledged++;
         }
       );
-      commandsSent++;
-    }, 1000 / commandsPerSecond); // Interval pengiriman perintah
-
-    // Hentikan tes setelah durasi selesai
+    }, 1000 / commandsPerSecond);
     setTimeout(() => {
       clearInterval(testInterval);
       setIsThroughputTesting(false);
       const result = commandsAcknowledged / (testDuration / 1000);
-      setThroughputResult(result);
-      console.log(
-        `Throughput Test Selesai: ${result.toFixed(2)} perintah/detik`
-      );
+      saveThroughputLog(activeSessionId, result);
     }, testDuration);
+  };
+
+  const saveThroughputLog = async (sessionId: string, result: number) => {
+    try {
+      await fetch(`${API_URL}/throughput-logs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId, result }),
+      });
+    } catch (error) {
+      console.error("Gagal menyimpan log throughput:", error);
+    }
   };
 
   // Komponen Header untuk FlatList
@@ -206,38 +288,40 @@ export default function PerformanceScreen() {
           </Picker>
         </View>
 
-        {/* throughput test */}
-        <Text style={styles.subtitle}>Throughput Test</Text>
-        <Pressable
-          style={[styles.button, isThroughputTesting && styles.buttonDisabled]}
-          onPress={startThroughputTest}
-          disabled={isThroughputTesting}
-        >
-          {isThroughputTesting ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Start Throughput Test</Text>
-          )}
-        </Pressable>
-        {throughputResult > 0 && (
-          <View style={styles.resultContainer}>
-            <Text style={styles.resultText}>
-              Hasil: {throughputResult.toFixed(2)} Perintah / Detik
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.separator} />
-
-        {/* delay test */}
-        <Text style={styles.subtitle}>Delay Test</Text>
-
         {/* tombol mulai */}
         <Button
-          title={isDelayTesting ? "Stop Delay Test" : "Start Delay Test"}
+          title={
+            isDelayTesting
+              ? `Hentikan Tes #${sessions.length + 1}`
+              : "Mulai Uji Coba Delay Baru"
+          }
           onPress={isDelayTesting ? stopDelayTest : startDelayTest}
           color={isDelayTesting ? "red" : Colors.light.tint}
         />
+
+        <Text style={styles.subtitle}>Riwayat Percobaan</Text>
+
+        <View style={{ marginBottom: 20 }}>
+          {sessions.map((session, index) => (
+            <TouchableOpacity
+              key={session._id}
+              style={[
+                styles.historyItem,
+                selectedSessionId === session._id && styles.historyItemSelected,
+              ]}
+              onPress={() =>
+                !isDelayTesting && setSelectedSessionId(session._id)
+              }
+            >
+              <Text
+                style={selectedSessionId === session._id && { color: "white" }}
+              >
+                Percobaan #{sessions.length - index} (
+                {new Date(session.startTime).toLocaleString("id-ID")})
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         {/* grafik delay test */}
         <Text style={styles.subtitle}>Delay Graphic (ms)</Text>
@@ -278,8 +362,59 @@ export default function PerformanceScreen() {
 
         <View style={styles.separator} />
 
+        <Text style={styles.subtitle}>Uji Throughput</Text>
+        <Text style={{ marginBottom: 10, fontStyle: "italic", color: "#666" }}>
+          (Hanya bisa dijalankan saat sesi tes delay sedang aktif)
+        </Text>
+        <Pressable
+          style={[
+            styles.button,
+            (!isDelayTesting || isThroughputTesting) && styles.buttonDisabled,
+          ]}
+          onPress={startThroughputTest}
+          disabled={!isDelayTesting || isThroughputTesting}
+        >
+          {isThroughputTesting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Mulai Uji Coba Throughput</Text>
+          )}
+        </Pressable>
+        <Text style={styles.subtitle}>Tabel Log Throughput</Text>
+        <View style={styles.tableHeader}>
+          <Text style={styles.tableHeaderText}>Waktu</Text>
+          <Text style={styles.tableHeaderText}>Hasil (Perintah/detik)</Text>
+        </View>
+        {throughputLogs.map((log) => (
+          <View style={styles.tableRow} key={log._id}>
+            <Text>{new Date(log.timestamp).toLocaleString("id-ID")}</Text>
+            <Text>{log.result.toFixed(2)}</Text>
+          </View>
+        ))}
+        {totalThroughputPages > 1 && (
+          <View style={styles.paginationContainer}>
+            <Button
+              title="< Sebelumnya"
+              onPress={() =>
+                fetchThroughputLogs(selectedSessionId!, throughputPage - 1)
+              }
+              disabled={throughputPage <= 1}
+            />
+            <Text style={styles.paginationText}>
+              {throughputPage} / {totalThroughputPages || 1}
+            </Text>
+            <Button
+              title="Berikutnya >"
+              onPress={() =>
+                fetchThroughputLogs(selectedSessionId!, throughputPage + 1)
+              }
+              disabled={throughputPage >= totalThroughputPages}
+            />
+          </View>
+        )}
+
         {/* tabel delay test */}
-        <Text style={styles.subtitle}>Tabel Log</Text>
+        <Text style={styles.subtitle}>Tabel Log Delay</Text>
         <View style={styles.tableHeader}>
           <Text style={styles.tableHeaderText}>Waktu</Text>
           <Text style={styles.tableHeaderText}>Delay (ms)</Text>
@@ -296,7 +431,7 @@ export default function PerformanceScreen() {
         ListHeaderComponent={ListHeader}
         renderItem={({ item }) => (
           <View style={styles.tableRow}>
-            <Text>{new Date(item.timestamp).toLocaleTimeString()}</Text>
+            <Text>{new Date(item.timestamp).toLocaleTimeString("id-ID")}</Text>
             <Text>{item.delay} ms</Text>
           </View>
         )}
