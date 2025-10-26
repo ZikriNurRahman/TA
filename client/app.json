@@ -34,7 +34,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true
@@ -44,7 +45,8 @@
       "router": {},
       "eas": {
         "projectId": "305a5a3a-f930-4119-ac87-5d89c9b21ef0"
-      }
+      },
+      "clerkPublishableKey": "pk_test_Z3JhbmQtZ29sZGZpc2gtNDYuY2xlcmsuYWNjb3VudHMuZGV2JA"
     },
     "runtimeVersion": {
       "policy": "appVersion"

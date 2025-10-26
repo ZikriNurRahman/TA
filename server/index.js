@@ -3,6 +3,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const http = require("http");
 const { Server } = require("socket.io");
+const { ClerkExpressWithAuth } = require("@clerk/clerk-sdk-node");
 
 const app = express();
 const server = http.createServer(app);
@@ -18,6 +19,7 @@ const io = new Server(server, {
 const port = process.env.PORT || 3000;
 const MONGO_URI =
   "mongodb+srv://zikrinurrahman_ta:9pzsQvnyIVL2cI45@clusterforta.csgnuz7.mongodb.net/?retryWrites=true&w=majority&appName=clusterForTA";
+const CLERK_SECRET_KEY = "sk_test_DfnKANUCdEmTHrNMLOPL4vpIX1U32VO62Kjyao8XQt";
 
 // supaya bisa cross port
 app.use(
@@ -26,12 +28,16 @@ app.use(
   })
 );
 app.use(express.json());
+// Middleware untuk memeriksa semua rute di bawah ini
+// ClerkExpressWithAuth akan mengekstrak `userId` dari token dan menaruhnya di `req.auth.userId`
+app.use(ClerkExpressWithAuth({ secretKey: CLERK_SECRET_KEY }));
 
 // --- SKEMA DATABASE ---
 const deviceSchema = new mongoose.Schema({
   name: { type: String, required: true },
   type: { type: String, required: true },
   isOn: { type: Boolean, default: false },
+  userId: { type: String, required: true, index: true },
 });
 
 const Device = mongoose.model("Device", deviceSchema);
@@ -82,7 +88,10 @@ app.get("/", (req, res) => {
 // Endpoint untuk mendapatkan semua perangkat
 app.get("/devices", async (req, res) => {
   try {
-    const devices = await Device.find();
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+
+    const devices = await Device.find({ userId: req.auth.userId });
     res.json(devices);
   } catch (error) {
     res.status(500).json({ message: "Gagal mengambil data perangkat", error });
@@ -92,6 +101,9 @@ app.get("/devices", async (req, res) => {
 // Endpoint untuk menambahkan perangkat baru
 app.post("/devices", async (req, res) => {
   try {
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+
     const { name, type } = req.body; // Ambil nama dan tipe dari body request
 
     // Validasi sederhana
@@ -105,6 +117,7 @@ app.post("/devices", async (req, res) => {
       name,
       type,
       isOn: false, // Perangkat baru selalu dalam keadaan mati
+      userId: req.auth.userId,
     });
 
     await newDevice.save(); // Simpan perangkat baru ke database
@@ -119,7 +132,13 @@ app.post("/devices", async (req, res) => {
 // Endpoint untuk mendapatkan satu perangkat berdasarkan ID
 app.get("/devices/:id", async (req, res) => {
   try {
-    const device = await Device.findById(req.params.id);
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+
+    const device = await Device.findById({
+      _id: req.params.id,
+      userId: req.auth.userId,
+    });
     if (device) {
       res.json(device);
     } else {
@@ -133,15 +152,21 @@ app.get("/devices/:id", async (req, res) => {
 // Endpoint untuk mengedit (update) nama perangkat
 app.put("/devices/:id", async (req, res) => {
   try {
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+
     const { name } = req.body; // Ambil nama baru dari body
     if (!name) {
       return res.status(400).json({ message: "Nama tidak boleh kosong" });
     }
 
     const device = await Device.findByIdAndUpdate(
-      req.params.id,
       { name: name }, // Data yang ingin diupdate
-      { new: true } // Opsi untuk mengembalikan dokumen yang sudah ter-update
+      { new: true }, // Opsi untuk mengembalikan dokumen yang sudah ter-update
+      {
+        _id: req.params.id,
+        userId: req.auth.userId,
+      }
     );
 
     if (device) {
@@ -159,7 +184,13 @@ app.put("/devices/:id", async (req, res) => {
 // Endpoint untuk menghapus perangkat berdasarkan ID
 app.delete("/devices/:id", async (req, res) => {
   try {
-    const device = await Device.findByIdAndDelete(req.params.id);
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+
+    const device = await Device.findByIdAndDelete({
+      _id: req.params.id,
+      userId: req.auth.userId,
+    });
 
     if (device) {
       io.emit("devices_updated"); // <-- KIRIM EVENT
@@ -177,8 +208,13 @@ app.delete("/devices/:id", async (req, res) => {
 // Endpoint untuk mengubah status (toggle) perangkat berdasarkan ID
 app.post("/devices/:id/toggle", async (req, res) => {
   try {
-    const deviceId = req.params.id;
-    const device = await Device.findById(deviceId);
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+
+    const device = await Device.findById({
+      _id: req.params.id,
+      userId: req.auth.userId,
+    });
 
     if (device) {
       device.isOn = !device.isOn;

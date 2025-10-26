@@ -13,15 +13,23 @@ import type { Device } from "@/types/Device";
 import { homeStyles } from "@/styles/styles";
 import { io } from "socket.io-client";
 import { API_URL } from "@/constants/api";
+import { useAuth } from "@clerk/clerk-expo";
 
 export default function HomeScreen() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const { getToken } = useAuth();
+
   const fetchDevices = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/devices`);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/devices`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
       const data: Device[] = await response.json();
       setDevices(data);
     } catch (error) {
