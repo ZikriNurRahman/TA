@@ -28,6 +28,7 @@ app.use(
   })
 );
 app.use(express.json());
+
 // Middleware untuk memeriksa semua rute di bawah ini
 // ClerkExpressWithAuth akan mengekstrak `userId` dari token dan menaruhnya di `req.auth.userId`
 app.use(ClerkExpressWithAuth({ secretKey: CLERK_SECRET_KEY }));
@@ -80,9 +81,10 @@ const ThroughputLog = mongoose.model("ThroughputLog", throughputLogSchema);
 
 // --- RUTE API ---
 
-// Ketika aplikasi client mengakses alamat ini, server akan merespons.
 app.get("/", (req, res) => {
-  res.send("Halo, ini adalah server untuk aplikasi Smarthome!");
+  res.send(
+    "Halo, ini adalah server untuk aplikasi iot online controller!, untuk info lebih lanjut hubungi zikrinur.official@gmail.com"
+  );
 });
 
 // Endpoint untuk mendapatkan semua perangkat
@@ -91,6 +93,7 @@ app.get("/devices", async (req, res) => {
     if (!req.auth.userId)
       return res.status(401).json({ message: "Tidak terautentikasi" });
 
+    // Filter berdasarkan userId dari token
     const devices = await Device.find({ userId: req.auth.userId });
     res.json(devices);
   } catch (error) {
@@ -121,6 +124,7 @@ app.post("/devices", async (req, res) => {
     });
 
     await newDevice.save(); // Simpan perangkat baru ke database
+    // Note: Socket.IO belum diamankan, jadi emit ke semua dulu sementara
     io.emit("devices_updated"); // <-- KIRIM EVENT
     console.log(`Perangkat baru ditambahkan: ${name}`);
     res.status(201).json(newDevice); // Kirim kembali data perangkat yang baru dibuat
@@ -135,10 +139,12 @@ app.get("/devices/:id", async (req, res) => {
     if (!req.auth.userId)
       return res.status(401).json({ message: "Tidak terautentikasi" });
 
-    const device = await Device.findById({
+    // Cari perangkat dengan ID tersebut DAN userId pemilik
+    const device = await Device.findOne({
       _id: req.params.id,
       userId: req.auth.userId,
     });
+
     if (device) {
       res.json(device);
     } else {
@@ -156,11 +162,13 @@ app.put("/devices/:id", async (req, res) => {
       return res.status(401).json({ message: "Tidak terautentikasi" });
 
     const { name } = req.body; // Ambil nama baru dari body
+
+    // validasi sederhana
     if (!name) {
       return res.status(400).json({ message: "Nama tidak boleh kosong" });
     }
 
-    const device = await Device.findByIdAndUpdate(
+    const device = await Device.findOneAndUpdate(
       { name: name }, // Data yang ingin diupdate
       { new: true }, // Opsi untuk mengembalikan dokumen yang sudah ter-update
       {
@@ -174,7 +182,9 @@ app.put("/devices/:id", async (req, res) => {
       console.log(`Perangkat diperbarui: ${device.name}`);
       res.json(device);
     } else {
-      res.status(404).json({ message: "Perangkat tidak ditemukan" });
+      res
+        .status(404)
+        .json({ message: "Perangkat tidak ditemukan atau akses ditolak  " });
     }
   } catch (error) {
     res.status(500).json({ message: "Gagal memperbarui perangkat", error });
@@ -187,7 +197,7 @@ app.delete("/devices/:id", async (req, res) => {
     if (!req.auth.userId)
       return res.status(401).json({ message: "Tidak terautentikasi" });
 
-    const device = await Device.findByIdAndDelete({
+    const device = await Device.findOneAndDelete({
       _id: req.params.id,
       userId: req.auth.userId,
     });
@@ -198,7 +208,9 @@ app.delete("/devices/:id", async (req, res) => {
       // Mengirim konfirmasi kembali ke client
       res.status(200).json({ message: "Perangkat berhasil dihapus" });
     } else {
-      res.status(404).json({ message: "Perangkat tidak ditemukan" });
+      res
+        .status(404)
+        .json({ message: "Perangkat tidak ditemukan atau akses ditolak" });
     }
   } catch (error) {
     res.status(500).json({ message: "Gagal menghapus perangkat", error });
@@ -211,7 +223,7 @@ app.post("/devices/:id/toggle", async (req, res) => {
     if (!req.auth.userId)
       return res.status(401).json({ message: "Tidak terautentikasi" });
 
-    const device = await Device.findById({
+    const device = await Device.findOne({
       _id: req.params.id,
       userId: req.auth.userId,
     });
@@ -225,7 +237,7 @@ app.post("/devices/:id/toggle", async (req, res) => {
       );
       res.json(device);
     } else {
-      res.status(404).send("Perangkat tidak ditemukan");
+      res.status(404).send("Perangkat tidak ditemukan atau akses ditolak");
     }
   } catch (error) {
     res.status(500).json({ message: "Gagal mengubah status perangkat", error });
@@ -379,17 +391,6 @@ const startServer = async () => {
   try {
     await mongoose.connect(MONGO_URI);
     console.log("Berhasil terhubung ke MongoDB!");
-
-    // Cek apakah ada data, jika tidak ada, tambahkan data awal
-    const deviceCount = await Device.countDocuments();
-    if (deviceCount === 0) {
-      await Device.insertMany([
-        { name: "Lampu Ruang Tamu", type: "light", isOn: false },
-        { name: "Lampu Kamar Tidur", type: "light", isOn: true },
-        { name: "Kipas Angin", type: "fan", isOn: false },
-      ]);
-      console.log("Data awal berhasil ditambahkan ke MongoDB.");
-    }
 
     server.listen(port, () => {
       console.log(`Server Smarthome berjalan di (ip):${port}`);

@@ -10,9 +10,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import type { Device } from "@/types/Device";
-import { idStyles } from "@/styles/styles";
+import { idStyles, addDeviceStyles } from "@/styles/styles";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { API_URL } from "@/constants/api";
+import { useAuth } from "@clerk/clerk-expo";
 
 export default function DeviceDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>(); // Mengambil ID dari URL
@@ -22,43 +23,55 @@ export default function DeviceDetailScreen() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [newName, setNewName] = useState("");
+  const { getToken } = useAuth();
 
   const fetchDevice = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_URL}/devices/${id}`);
+
+      // ambil token
+      const token = await getToken();
+
+      const response = await fetch(`${API_URL}/devices/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
       if (!response.ok) throw new Error("Perangkat tidak ditemukan");
+
       const data = await response.json();
       setDevice(data);
       setNewName(data.name); // Set nama awal untuk input edit
     } catch (error) {
       console.error(error);
       Alert.alert("Error", "Gagal memuat data perangkat.");
+      router.back(); // Kembali jika error
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (!id) return;
-    fetchDevice();
+    if (id) fetchDevice();
   }, [id]);
 
-  // Fungsi untuk menangani penghapusan perangkat
+  // fungsi delete
   const handleDelete = async () => {
     setIsModalVisible(false); // Tutup modal dulu
+
     try {
+      const token = await getToken();
       const response = await fetch(`${API_URL}/devices/${id}`, {
         method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
       });
+
       if (!response.ok)
         throw new Error("Gagal menghapus perangkat dari server.");
 
       router.back(); // Kembali ke halaman utama setelah berhasil
     } catch (error) {
       console.error(error);
-      // Anda bisa menampilkan Alert di sini untuk notifikasi error
-      alert("Gagal menghapus perangkat.");
+      Alert.alert("Gagal menghapus perangkat.");
     }
   };
 
@@ -73,12 +86,18 @@ export default function DeviceDetailScreen() {
       Alert.alert("Error", "Nama tidak boleh kosong.");
       return;
     }
+
     try {
+      const token = await getToken();
       const response = await fetch(`${API_URL}/devices/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ name: newName }),
       });
+
       if (!response.ok) throw new Error("Gagal menyimpan perubahan");
 
       const updatedDevice = await response.json();
@@ -106,7 +125,7 @@ export default function DeviceDetailScreen() {
     <SafeAreaView style={idStyles.container}>
       {isEditing ? (
         <TextInput
-          style={idStyles.inputText} // Kita bisa pakai style yang sama
+          style={addDeviceStyles.input} // Kita bisa pakai style yang sama
           value={newName}
           onChangeText={setNewName}
           autoFocus={true}

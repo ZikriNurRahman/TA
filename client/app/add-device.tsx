@@ -2,13 +2,17 @@ import { useState } from "react";
 import { View, Text, TextInput, Button, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { addDeviceStyles } from "@/styles/styles";
+import { addDeviceStyles as styles } from "@/styles/styles";
 import { API_URL } from "@/constants/api";
+import { useAuth } from "@clerk/clerk-expo";
 
 export default function AddDeviceScreen() {
   const [name, setName] = useState("");
   const [type, setType] = useState("light");
   const router = useRouter();
+
+  // ambil fungsi getToken
+  const { getToken } = useAuth();
 
   const handleAddDevice = async () => {
     if (!name.trim()) {
@@ -17,10 +21,14 @@ export default function AddDeviceScreen() {
     }
 
     try {
+      // ambil token
+      const token = await getToken();
+
       const response = await fetch(`${API_URL}/devices`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ name, type }),
       });
@@ -33,21 +41,21 @@ export default function AddDeviceScreen() {
       router.back(); // Kembali ke halaman utama setelah berhasil
     } catch (error) {
       console.error(error);
-      Alert.alert("Error", "Gagal terhubung ke server.tes");
+      Alert.alert("Error", "Gagal terhubung ke server");
     }
   };
 
   return (
-    <SafeAreaView style={addDeviceStyles.container}>
-      <Text style={addDeviceStyles.title}>Tambah Perangkat Baru</Text>
+    <SafeAreaView style={styles.container}>
+      <Text style={styles.title}>Tambah Perangkat Baru</Text>
       <TextInput
-        style={addDeviceStyles.input}
+        style={styles.input}
         placeholder="Nama Perangkat (misal: Lampu Dapur)"
         value={name}
         onChangeText={setName}
       />
       <TextInput
-        style={addDeviceStyles.input}
+        style={styles.input}
         placeholder="Tipe Perangkat (misal: light atau fan)"
         value={type}
         onChangeText={setType}

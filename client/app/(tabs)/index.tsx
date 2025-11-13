@@ -7,7 +7,7 @@ import {
   SafeAreaView,
   TouchableOpacity,
 } from "react-native";
-import { Link } from "expo-router";
+import { Link, useFocusEffect } from "expo-router";
 import { DeviceCard } from "@/components/DeviceCard";
 import type { Device } from "@/types/Device";
 import { homeStyles } from "@/styles/styles";
@@ -19,17 +19,26 @@ export default function HomeScreen() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // ambil fungsi getToken
   const { getToken } = useAuth();
 
+  // ambil data semua perangkat dalam satu akun
   const fetchDevices = async () => {
     try {
       setLoading(true);
+
+      // ambil token sebelum request
       const token = await getToken();
+
       const response = await fetch(`${API_URL}/devices`, {
+        // header authorization
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
+
+      if (!response.ok) throw new Error("Gagal mengambil data");
+
       const data: Device[] = await response.json();
       setDevices(data);
     } catch (error) {
@@ -48,22 +57,31 @@ export default function HomeScreen() {
     );
 
     try {
+      // ambil token
+      const token = await getToken();
+
       const response = await fetch(`${API_URL}/devices/${id}/toggle`, {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`, // header authorization
+        },
       });
+
       if (!response.ok) {
         throw new Error("Gagal mengubah status perangkat di server.");
       }
     } catch (error) {
       console.error("Error saat toggle:", error);
       Alert.alert("Error", "Gagal menyinkronkan dengan server.");
-      setDevices((currentDevices) =>
-        currentDevices.map((device) =>
-          device._id === id ? { ...device, isOn: !device.isOn } : device
-        )
-      );
+      fetchDevices(); // Revert jika gagal
     }
   };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchDevices();
+    }, [])
+  );
 
   useEffect(() => {
     // 2. Buat koneksi socket
@@ -101,6 +119,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={homeStyles.container}>
+      {/* judul dan add device */}
       <View style={homeStyles.header}>
         <Text style={homeStyles.title}>Perangkat</Text>
         <Link href="/add-device" asChild>
@@ -109,6 +128,8 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
       </View>
+
+      {/* list perangkat */}
       <FlatList
         data={devices}
         keyExtractor={(item) => item._id.toString()}
