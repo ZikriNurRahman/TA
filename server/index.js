@@ -5,6 +5,9 @@ const http = require("http");
 const { Server } = require("socket.io");
 const { ClerkExpressWithAuth } = require("@clerk/clerk-sdk-node");
 
+process.env.CLERK_SECRET_KEY =
+  "sk_test_DfnKANUCdEmTHrNMLOPL4vpIX1U32VO62Kjyao8XQt";
+
 const app = express();
 const server = http.createServer(app);
 
@@ -19,7 +22,6 @@ const io = new Server(server, {
 const port = process.env.PORT || 3000;
 const MONGO_URI =
   "mongodb+srv://zikrinurrahman_ta:9pzsQvnyIVL2cI45@clusterforta.csgnuz7.mongodb.net/?retryWrites=true&w=majority&appName=clusterForTA";
-const CLERK_SECRET_KEY = "sk_test_DfnKANUCdEmTHrNMLOPL4vpIX1U32VO62Kjyao8XQt";
 
 // supaya bisa cross port
 app.use(
@@ -31,7 +33,7 @@ app.use(express.json());
 
 // Middleware untuk memeriksa semua rute di bawah ini
 // ClerkExpressWithAuth akan mengekstrak `userId` dari token dan menaruhnya di `req.auth.userId`
-app.use(ClerkExpressWithAuth({ secretKey: CLERK_SECRET_KEY }));
+app.use(ClerkExpressWithAuth());
 
 // --- SKEMA DATABASE ---
 const deviceSchema = new mongoose.Schema({
@@ -90,23 +92,43 @@ app.get("/", (req, res) => {
 // Endpoint untuk mendapatkan semua perangkat
 app.get("/devices", async (req, res) => {
   try {
-    if (!req.auth.userId)
-      return res.status(401).json({ message: "Tidak terautentikasi" });
+    // 1. Log untuk debugging (Cek apakah request sampai sini)
+    console.log("Menerima request GET /devices...");
 
-    // Filter berdasarkan userId dari token
+    // 2. CEK KEAMANAN: Pastikan req.auth ada sebelum akses userId
+    // Jika req.auth undefined, akses req.auth.userId akan bikin server CRASH
+    if (!req.auth || !req.auth.userId) {
+      console.log("Gagal: User tidak terdeteksi oleh Clerk");
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+    }
+
+    console.log(`User ID terdeteksi: ${req.auth.userId}`);
+
+    // 3. Filter data berdasarkan userId
     const devices = await Device.find({ userId: req.auth.userId });
     res.json(devices);
   } catch (error) {
-    res.status(500).json({ message: "Gagal mengambil data perangkat", error });
+    // 4. Log error lengkap ke TERMINAL SERVER
+    console.error("SERVER ERROR di GET /devices:", error);
+
+    // 5. Kirim pesan JSON (jangan kirim objek error mentah yang bisa bikin crash lagi)
+    res.status(500).json({
+      message: "Gagal mengambil data perangkat di server",
+      error: error.message,
+    });
   }
 });
 
 // Endpoint untuk menambahkan perangkat baru
 app.post("/devices", async (req, res) => {
   try {
-    if (!req.auth.userId)
-      return res.status(401).json({ message: "Tidak terautentikasi" });
+    // if (!req.auth.userId)
+    //   return res.status(401).json({ message: "Tidak terautentikasi" });
 
+    if (!req.auth || !req.auth.userId) {
+      console.log("Gagal: User tidak terautentikasi");
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+    }
     const { name, type } = req.body; // Ambil nama dan tipe dari body request
 
     // Validasi sederhana
@@ -125,11 +147,20 @@ app.post("/devices", async (req, res) => {
 
     await newDevice.save(); // Simpan perangkat baru ke database
     // Note: Socket.IO belum diamankan, jadi emit ke semua dulu sementara
-    io.emit("devices_updated"); // <-- KIRIM EVENT
-    console.log(`Perangkat baru ditambahkan: ${name}`);
+    // io.emit("devices_updated"); // <-- KIRIM EVENT
+    // Cek apakah io terdefinisi sebelum emit
+    if (typeof io !== "undefined") {
+      io.emit("devices_updated");
+    }
+    console.log(`Perangkat baru ditambahkan: ${name} oleh ${req.auth.userId}`);
     res.status(201).json(newDevice); // Kirim kembali data perangkat yang baru dibuat
   } catch (error) {
-    res.status(500).json({ message: "Gagal menambahkan perangkat", error });
+    console.error("SERVER ERROR saat tambah perangkat:", error);
+    // res.status(500).json({ message: "Gagal menambahkan perangkat", error });
+    res.status(500).json({
+      message: "Gagal menambahkan perangkat",
+      error: error.message, // Hanya kirim pesannya saja
+    });
   }
 });
 

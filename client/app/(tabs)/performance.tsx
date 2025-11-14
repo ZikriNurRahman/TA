@@ -24,6 +24,7 @@ import { ThroughputLog } from "@/types/ThroughputLog";
 import { performanceStyles as styles } from "@/styles/styles";
 import { Colors } from "@/constants/Colors";
 import { API_URL } from "@/constants/api";
+import { useAuth } from "@clerk/clerk-expo";
 
 let socket: Socket;
 
@@ -52,17 +53,30 @@ export default function PerformanceScreen() {
   const [throughputPage, setThroughputPage] = useState(1);
   const [totalThroughputPages, setTotalThroughputPages] = useState(1);
 
+  // ambil token
+  const { getToken } = useAuth();
+
   // -- FUNGSI-FUNGSI LOGIKA --
 
   // Fetch semua perangkat untuk ditampilkan di dropdown
   useEffect(() => {
     const fetchDevices = async () => {
       try {
-        const response = await fetch(`${API_URL}/devices`);
+        const token = await getToken();
+        const response = await fetch(`${API_URL}/devices`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!response.ok) throw new Error("Gagal ambil perangkat");
+
         const data = await response.json();
-        setDevices(data);
-        if (data.length > 0) {
-          setSelectedDevice(data[0]); // Pilih perangkat pertama sebagai default
+        if (Array.isArray(data)) {
+          setDevices(data);
+          if (data.length > 0) {
+            setSelectedDevice(data[0]);
+          }
+        } else {
+          console.error("Data perangkat bukan array:", data);
         }
       } catch (error) {
         console.error("Gagal mengambil perangkat:", error);
@@ -88,15 +102,25 @@ export default function PerformanceScreen() {
       socket.disconnect();
       if (delayTestInterval) clearInterval(delayTestInterval as NodeJS.Timeout);
     };
-  }, []);
+  }, [selectedSessionId]);
 
   // Fetch riwayat sesi setiap kali perangkat diganti
   const fetchSessions = useCallback(
     async (deviceId: string) => {
       try {
-        const response = await fetch(`${API_URL}/devices/${deviceId}/sessions`);
+        const token = await getToken();
+        const response = await fetch(
+          `${API_URL}/devices/${deviceId}/sessions`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (!response.ok) throw new Error("Gagal ambil sesi");
+
         const data: TestSession[] = await response.json();
         setSessions(data);
+
         // Jika tidak ada sesi aktif, tampilkan data dari sesi terbaru
         if (!isDelayTesting && data.length > 0) {
           setSelectedSessionId(data[0]._id);
@@ -108,7 +132,7 @@ export default function PerformanceScreen() {
         console.error("Gagal mengambil sesi:", error);
       }
     },
-    [isDelayTesting]
+    [isDelayTesting, getToken]
   );
 
   useEffect(() => {
@@ -119,7 +143,13 @@ export default function PerformanceScreen() {
 
   const fetchLogs = async (sessionId: string) => {
     try {
-      const response = await fetch(`${API_URL}/sessions/${sessionId}/logs`);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/sessions/${sessionId}/logs`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) throw new Error("Gagal ambil logs");
+
       setLogs(await response.json());
     } catch (error) {
       console.error("Gagal mengambil log delay:", error);
@@ -128,9 +158,16 @@ export default function PerformanceScreen() {
 
   const fetchThroughputLogs = async (sessionId: string, page: number) => {
     try {
+      const token = await getToken();
       const response = await fetch(
-        `${API_URL}/sessions/${sessionId}/throughput-logs?page=${page}`
+        `${API_URL}/sessions/${sessionId}/throughput-logs?page=${page}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
       );
+
+      if (!response.ok) throw new Error("Gagal ambil log throughput");
+
       const data = await response.json();
       setThroughputLogs(data.logs);
       setThroughputPage(data.currentPage);
@@ -153,11 +190,18 @@ export default function PerformanceScreen() {
     setLogs([]);
     setThroughputLogs([]);
     try {
+      const token = await getToken();
       const response = await fetch(`${API_URL}/sessions`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ deviceId: selectedDevice._id }),
       });
+
+      if (!response.ok) throw new Error("Gagal buat sesi");
+
       const newSession: TestSession = await response.json();
       setActiveSessionId(newSession._id);
       setSelectedSessionId(newSession._id);
@@ -187,9 +231,13 @@ export default function PerformanceScreen() {
 
   const saveLog = async (sessionId: string, delay: number) => {
     try {
+      const token = await getToken();
       await fetch(`${API_URL}/logs`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ sessionId, delay }),
       });
     } catch (error) {
@@ -230,9 +278,13 @@ export default function PerformanceScreen() {
 
   const saveThroughputLog = async (sessionId: string, result: number) => {
     try {
+      const token = await getToken();
       await fetch(`${API_URL}/throughput-logs`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ sessionId, result }),
       });
     } catch (error) {

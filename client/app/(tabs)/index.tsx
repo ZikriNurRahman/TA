@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   FlatList,
   Alert,
@@ -78,7 +78,7 @@ export default function HomeScreen() {
   };
 
   useFocusEffect(
-    React.useCallback(() => {
+    useCallback(() => {
       fetchDevices();
     }, [])
   );
@@ -130,14 +130,23 @@ export default function HomeScreen() {
       </View>
 
       {/* list perangkat */}
-      <FlatList
-        data={devices}
-        keyExtractor={(item) => item._id.toString()}
-        renderItem={({ item }) => (
-          <DeviceCard device={item} onToggle={() => handleToggle(item._id)} />
-        )}
-        contentContainerStyle={homeStyles.listContainer}
-      />
+      {devices.length === 0 ? (
+        <View
+          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+        >
+          <Text style={{ color: "#666" }}>Belum ada perangkat.</Text>
+          <Text style={{ color: "#666" }}>Tekan + untuk menambahkan.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={devices}
+          keyExtractor={(item) => item._id.toString()}
+          renderItem={({ item }) => (
+            <DeviceCard device={item} onToggle={() => handleToggle(item._id)} />
+          )}
+          contentContainerStyle={homeStyles.listContainer}
+        />
+      )}
     </SafeAreaView>
   );
 }

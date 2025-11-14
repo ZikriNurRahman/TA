@@ -34,14 +34,15 @@ export default function AddDeviceScreen() {
       });
 
       if (!response.ok) {
-        throw new Error("Gagal menambahkan perangkat");
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Gagal menambahkan perangkat");
       }
 
       Alert.alert("Sukses", "Perangkat berhasil ditambahkan!");
       router.back(); // Kembali ke halaman utama setelah berhasil
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      Alert.alert("Error", "Gagal terhubung ke server");
+      Alert.alert("Error", error.message || "Gagal terhubung ke server");
     }
   };
 
