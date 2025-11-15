@@ -87,7 +87,21 @@ export default function PerformanceScreen() {
     // Inisialisasi koneksi socket
     socket = io(API_URL);
 
-    // Listener untuk update log secara real-time
+    return () => {
+      socket.disconnect();
+      if (delayTestInterval) clearInterval(delayTestInterval as NodeJS.Timeout);
+    };
+  }, []);
+
+  // LISTENER SOCKET (Di-update saat sesi berubah)
+  useEffect(() => {
+    if (!socket) return;
+
+    // Bersihkan listener lama agar tidak duplikat
+    socket.off("log_updated");
+    socket.off("throughput_log_updated");
+
+    // Listener baru
     socket.on("log_updated", ({ sessionId }) => {
       if (sessionId === selectedSessionId) {
         fetchLogs(sessionId);
@@ -98,9 +112,10 @@ export default function PerformanceScreen() {
       if (sessionId === selectedSessionId) fetchThroughputLogs(sessionId, 1);
     });
 
+    // Cleanup
     return () => {
-      socket.disconnect();
-      if (delayTestInterval) clearInterval(delayTestInterval as NodeJS.Timeout);
+      socket.off("log_updated");
+      socket.off("throughput_log_updated");
     };
   }, [selectedSessionId]);
 
@@ -124,7 +139,8 @@ export default function PerformanceScreen() {
         // Jika tidak ada sesi aktif, tampilkan data dari sesi terbaru
         if (!isDelayTesting && data.length > 0) {
           setSelectedSessionId(data[0]._id);
-        } else if (!isDelayTesting) {
+        } else if (!isDelayTesting && data.length === 0) {
+          setSelectedSessionId(null);
           setLogs([]); // Kosongkan log jika tidak ada riwayat
           setThroughputLogs([]);
         }
@@ -292,36 +308,36 @@ export default function PerformanceScreen() {
     }
   };
 
-  // Komponen Header untuk FlatList
-  const ListHeader = () => {
-    const screenWidth = Dimensions.get("window").width;
-    const chartWidth = logs.length > 5 ? logs.length * 60 : screenWidth - 32;
+  // --- SETUP GRAFIK ---
+  const screenWidth = Dimensions.get("window").width;
+  const chartWidth = logs.length > 5 ? logs.length * 60 : screenWidth - 32;
 
-    const chartData = {
-      labels: logs
-        .map((log) => new Date(log.timestamp).toLocaleTimeString())
-        .reverse(),
-      datasets: [
-        {
-          data: logs.length > 0 ? logs.map((log) => log.delay).reverse() : [0],
-        },
-      ],
-    };
+  // chart data
+  const chartData = {
+    labels: logs.map((log) => new Date(log.timestamp).toLocaleTimeString()),
+    datasets: [
+      {
+        data: logs.length > 0 ? logs.map((log) => log.delay) : [0],
+      },
+    ],
+  };
 
-    const maxDelay =
-      logs.length > 0 ? Math.max(...logs.map((log) => log.delay)) : 0;
-    let yAxisSegmentCount;
-    if (maxDelay <= 6) {
-      yAxisSegmentCount = Math.ceil(maxDelay) || 1;
-    } else {
-      yAxisSegmentCount = 5;
-    }
+  const maxDelay =
+    logs.length > 0 ? Math.max(...logs.map((log) => log.delay)) : 0;
+  let yAxisSegmentCount;
+  if (maxDelay <= 6) {
+    yAxisSegmentCount = Math.ceil(maxDelay) || 1;
+  } else {
+    yAxisSegmentCount = 5;
+  }
 
-    return (
-      <>
-        <Text style={styles.title}>{API_URL}</Text>
+  return (
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollView}>
+        {/* judul */}
+        <Text style={styles.title}>Uji Performa Jaringan</Text>
 
-        {/* pilih device */}
+        {/* Picker Device */}
         <View style={styles.pickerContainer}>
           <Picker
             selectedValue={selectedDevice?._id}
@@ -340,7 +356,7 @@ export default function PerformanceScreen() {
           </Picker>
         </View>
 
-        {/* tombol mulai */}
+        {/* Tombol Mulai/Stop */}
         <Button
           title={
             isDelayTesting
@@ -351,8 +367,8 @@ export default function PerformanceScreen() {
           color={isDelayTesting ? "red" : Colors.light.tint}
         />
 
+        {/* Riwayat */}
         <Text style={styles.subtitle}>Riwayat Percobaan</Text>
-
         <View style={{ marginBottom: 20 }}>
           {sessions.map((session, index) => (
             <TouchableOpacity
@@ -375,9 +391,9 @@ export default function PerformanceScreen() {
           ))}
         </View>
 
-        {/* grafik delay test */}
-        <Text style={styles.subtitle}>Delay Graphic (ms)</Text>
-        <ScrollView horizontal={true}>
+        {/* Grafik */}
+        <Text style={styles.subtitle}>Grafik Delay (ms)</Text>
+        <ScrollView horizontal={true} style={{ marginBottom: 20 }}>
           {logs.length > 0 ? (
             <LineChart
               data={chartData}
@@ -393,9 +409,7 @@ export default function PerformanceScreen() {
                 decimalPlaces: 0,
                 color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
                 style: { borderRadius: 16 },
-                // formatYLabel={(yValue) => Math.round(Number(yValue)).toString()}
                 propsForLabels: {
-                  // Tambahkan rotasi agar tidak bertabrakan
                   rotation: -45,
                   fontSize: 10,
                   dx: -10,
@@ -406,14 +420,21 @@ export default function PerformanceScreen() {
               style={{ marginVertical: 8, borderRadius: 16 }}
             />
           ) : (
-            <Text style={{ textAlign: "center", padding: 20 }}>
-              Jalankan tes untuk melihat grafik.
+            <Text
+              style={{
+                textAlign: "center",
+                padding: 20,
+                width: screenWidth - 40,
+              }}
+            >
+              Jalankan tes atau pilih riwayat untuk melihat grafik.
             </Text>
           )}
         </ScrollView>
 
         <View style={styles.separator} />
 
+        {/* Throughput Test */}
         <Text style={styles.subtitle}>Uji Throughput</Text>
         <Text style={{ marginBottom: 10, fontStyle: "italic", color: "#666" }}>
           (Hanya bisa dijalankan saat sesi tes delay sedang aktif)
@@ -432,6 +453,7 @@ export default function PerformanceScreen() {
             <Text style={styles.buttonText}>Mulai Uji Coba Throughput</Text>
           )}
         </Pressable>
+
         <Text style={styles.subtitle}>Tabel Log Throughput</Text>
         <View style={styles.tableHeader}>
           <Text style={styles.tableHeaderText}>Waktu</Text>
@@ -443,6 +465,8 @@ export default function PerformanceScreen() {
             <Text>{log.result.toFixed(2)}</Text>
           </View>
         ))}
+
+        {/* Pagination Throughput */}
         {totalThroughputPages > 1 && (
           <View style={styles.paginationContainer}>
             <Button
@@ -465,29 +489,21 @@ export default function PerformanceScreen() {
           </View>
         )}
 
-        {/* tabel delay test */}
+        {/* Tabel Delay (Dirender manual tanpa FlatList virtual) */}
         <Text style={styles.subtitle}>Tabel Log Delay</Text>
         <View style={styles.tableHeader}>
           <Text style={styles.tableHeaderText}>Waktu</Text>
           <Text style={styles.tableHeaderText}>Delay (ms)</Text>
         </View>
-      </>
-    );
-  };
-
-  return (
-    <SafeAreaView style={styles.container}>
-      <FlatList
-        data={logs}
-        keyExtractor={(item) => item._id}
-        ListHeaderComponent={ListHeader}
-        renderItem={({ item }) => (
-          <View style={styles.tableRow}>
-            <Text>{new Date(item.timestamp).toLocaleTimeString("id-ID")}</Text>
-            <Text>{item.delay} ms</Text>
+        {logs.map((log) => (
+          <View style={styles.tableRow} key={log._id}>
+            <Text>{new Date(log.timestamp).toLocaleTimeString("id-ID")}</Text>
+            <Text>{log.delay} ms</Text>
           </View>
-        )}
-      />
+        ))}
+
+        <View style={{ height: 50 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
