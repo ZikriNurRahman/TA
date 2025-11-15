@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -25,8 +25,6 @@ import { performanceStyles as styles } from "@/styles/styles";
 import { Colors } from "@/constants/Colors";
 import { API_URL } from "@/constants/api";
 import { useAuth } from "@clerk/clerk-expo";
-
-let socket: Socket;
 
 export default function PerformanceScreen() {
   // State untuk data utama
@@ -56,6 +54,10 @@ export default function PerformanceScreen() {
   // ambil token
   const { getToken } = useAuth();
 
+  // Gunakan useRef agar koneksi stabil dan tidak menyebabkan render ulang
+  const socketRef = useRef<Socket | null>(null);
+  const intervalRef = useRef<NodeJS.Timeout | number | null>(null);
+
   // -- FUNGSI-FUNGSI LOGIKA --
 
   // Fetch semua perangkat untuk ditampilkan di dropdown
@@ -82,19 +84,22 @@ export default function PerformanceScreen() {
         console.error("Gagal mengambil perangkat:", error);
       }
     };
+
     fetchDevices();
 
     // Inisialisasi koneksi socket
-    socket = io(API_URL);
+    socketRef.current = io(API_URL);
 
     return () => {
-      socket.disconnect();
-      if (delayTestInterval) clearInterval(delayTestInterval as NodeJS.Timeout);
+      socketRef.current?.disconnect();
+      if (intervalRef.current)
+        clearInterval(intervalRef.current as NodeJS.Timeout);
     };
   }, []);
 
   // LISTENER SOCKET (Di-update saat sesi berubah)
   useEffect(() => {
+    const socket = socketRef.current;
     if (!socket) return;
 
     // Bersihkan listener lama agar tidak duplikat
@@ -136,26 +141,30 @@ export default function PerformanceScreen() {
         const data: TestSession[] = await response.json();
         setSessions(data);
 
-        // Jika tidak ada sesi aktif, tampilkan data dari sesi terbaru
-        if (!isDelayTesting && data.length > 0) {
+        // Reset ke sesi terbaru HANYA JIKA:
+        // 1. Sedang tidak testing (!isDelayTesting)
+        // 2. Data sesi ada (data.length > 0)
+        // 3. DAN (Penting!) Belum ada sesi yang dipilih (!selectedSessionId)
+        if (!isDelayTesting && data.length > 0 && !selectedSessionId) {
           setSelectedSessionId(data[0]._id);
         } else if (!isDelayTesting && data.length === 0) {
           setSelectedSessionId(null);
-          setLogs([]); // Kosongkan log jika tidak ada riwayat
+          setLogs([]);
           setThroughputLogs([]);
         }
       } catch (error) {
         console.error("Gagal mengambil sesi:", error);
       }
     },
-    [isDelayTesting, getToken]
+    [isDelayTesting, getToken, selectedSessionId]
   );
 
   useEffect(() => {
     if (selectedDevice) {
+      setSelectedSessionId(null);
       fetchSessions(selectedDevice._id);
     }
-  }, [selectedDevice, fetchSessions]);
+  }, [selectedDevice]);
 
   const fetchLogs = async (sessionId: string) => {
     try {
@@ -239,7 +248,7 @@ export default function PerformanceScreen() {
 
   const runPingTest = (currentSessionId: string) => {
     const startTime = Date.now();
-    socket.emit("ping", () => {
+    socketRef.current?.emit("ping", () => {
       const delay = Date.now() - startTime;
       saveLog(currentSessionId, delay);
     });
@@ -276,7 +285,7 @@ export default function PerformanceScreen() {
     const totalCommands = (testDuration / 1000) * commandsPerSecond;
     const testInterval = setInterval(() => {
       if (commandsAcknowledged >= totalCommands) return;
-      socket.emit(
+      socketRef.current?.emit(
         "toggle_device",
         selectedDevice?._id,
         (response: { success: boolean }) => {
