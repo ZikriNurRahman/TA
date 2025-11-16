@@ -37,6 +37,7 @@ app.use(ClerkExpressWithAuth());
 
 // --- SKEMA DATABASE ---
 const deviceSchema = new mongoose.Schema({
+  _id: { type: String, required: true },
   name: { type: String, required: true },
   type: { type: String, required: true },
   isOn: { type: Boolean, default: false },
@@ -129,16 +130,15 @@ app.post("/devices", async (req, res) => {
       console.log("Gagal: User tidak terautentikasi");
       return res.status(401).json({ message: "Tidak terautentikasi" });
     }
-    const { name, type } = req.body; // Ambil nama dan tipe dari body request
+    const { name, type, macAddress } = req.body; // Ambil nama dan tipe dari body request
 
     // Validasi sederhana
-    if (!name || !type) {
-      return res
-        .status(400)
-        .json({ message: "Nama dan tipe perangkat harus diisi" });
+    if (!name || !type || !macAddress) {
+      return res.status(400).json({ message: "Semua Kolom Harus Diisi" });
     }
 
     const newDevice = new Device({
+      _id: macAddress,
       name,
       type,
       isOn: false, // Perangkat baru selalu dalam keadaan mati
@@ -155,8 +155,13 @@ app.post("/devices", async (req, res) => {
     console.log(`Perangkat baru ditambahkan: ${name} oleh ${req.auth.userId}`);
     res.status(201).json(newDevice); // Kirim kembali data perangkat yang baru dibuat
   } catch (error) {
+    // Handle error jika MAC Address duplikat
+    if (error.code === 11000) {
+      return res
+        .status(400)
+        .json({ message: "Perangkat dengan MAC Address ini sudah ada" });
+    }
     console.error("SERVER ERROR saat tambah perangkat:", error);
-    // res.status(500).json({ message: "Gagal menambahkan perangkat", error });
     res.status(500).json({
       message: "Gagal menambahkan perangkat",
       error: error.message, // Hanya kirim pesannya saja

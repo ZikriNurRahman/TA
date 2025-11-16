@@ -134,6 +134,7 @@ export default function DeviceDetailScreen() {
         <Text style={idStyles.title}>{device.name}</Text>
       )}
 
+      <Text style={idStyles.detail}>MAC Address: {device._id}</Text>
       <Text style={idStyles.detail}>Tipe: {device.type}</Text>
       <Text style={idStyles.detail}>
         Status: {device.isOn ? "Menyala" : "Mati"}
