@@ -227,32 +227,6 @@ app.put("/devices/:id", async (req, res) => {
   }
 });
 
-// Endpoint untuk menghapus perangkat berdasarkan ID
-app.delete("/devices/:id", async (req, res) => {
-  try {
-    if (!req.auth.userId)
-      return res.status(401).json({ message: "Tidak terautentikasi" });
-
-    const device = await Device.findOneAndDelete({
-      _id: req.params.id,
-      userId: req.auth.userId,
-    });
-
-    if (device) {
-      io.emit("devices_updated"); // <-- KIRIM EVENT
-      console.log(`Perangkat dihapus: ${device.name}`);
-      // Mengirim konfirmasi kembali ke client
-      res.status(200).json({ message: "Perangkat berhasil dihapus" });
-    } else {
-      res
-        .status(404)
-        .json({ message: "Perangkat tidak ditemukan atau akses ditolak" });
-    }
-  } catch (error) {
-    res.status(500).json({ message: "Gagal menghapus perangkat", error });
-  }
-});
-
 // Endpoint KHUSUS untuk menghapus semua perangkat simulator milik user
 app.delete("/devices/simulators", async (req, res) => {
   try {
@@ -278,6 +252,32 @@ app.delete("/devices/simulators", async (req, res) => {
     res
       .status(500)
       .json({ message: "Gagal menghapus simulator", error: error.message });
+  }
+});
+
+// Endpoint untuk menghapus perangkat berdasarkan ID
+app.delete("/devices/:id", async (req, res) => {
+  try {
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+
+    const device = await Device.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.auth.userId,
+    });
+
+    if (device) {
+      io.emit("devices_updated"); // <-- KIRIM EVENT
+      console.log(`Perangkat dihapus: ${device.name}`);
+      // Mengirim konfirmasi kembali ke client
+      res.status(200).json({ message: "Perangkat berhasil dihapus" });
+    } else {
+      res
+        .status(404)
+        .json({ message: "Perangkat tidak ditemukan atau akses ditolak" });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Gagal menghapus perangkat", error });
   }
 });
 

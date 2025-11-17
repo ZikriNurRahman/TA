@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { addDeviceStyles as styles } from "@/styles/styles"; // Kita pakai style yang sudah ada biar hemat
 import { API_URL } from "@/constants/api";
 import { useAuth } from "@clerk/clerk-expo";
+import { ConfirmModal } from "@/components/ConfirmModal";
 import { Colors } from "@/constants/Colors";
 
 export default function SimulatorScreen() {
@@ -20,6 +21,7 @@ export default function SimulatorScreen() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
+  const [isModalVisible, setIsModalVisible] = useState(false);
   const { getToken } = useAuth();
 
   // Fungsi Helper: Membuat MAC Address Random yang Valid (Format: XX:XX:XX:XX:XX:XX)
@@ -50,8 +52,15 @@ export default function SimulatorScreen() {
       // Kita ambil waktu SEKALI saja di sini agar semua device dalam batch ini punya waktu yg sama
       const now = new Date();
       // Format: Jam.Menit.Detik (contoh: 14.30.05)
-      const timeStamp = now.toLocaleTimeString("id-ID", { hour12: false });
-
+      const timeStamp = now.toLocaleTimeString("en-GB", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      });
       for (let i = 1; i <= num; i++) {
         // Nama: Device 1, Device 2, dst.
         const name = `Device ${i} (${timeStamp})`;
@@ -95,41 +104,39 @@ export default function SimulatorScreen() {
     }
   };
 
-  // Fungsi Bersih-bersih (Hapus semua perangkat simulator)
-  const deleteAllSimulators = async () => {
-    Alert.alert(
-      "Konfirmasi Hapus",
-      "Apakah Anda yakin ingin menghapus SEMUA perangkat virtual simulator?",
-      [
-        { text: "Batal", style: "cancel" },
-        {
-          text: "Hapus Semua",
-          style: "destructive",
-          onPress: async () => {
-            setIsDeleting(true);
-            try {
-              const token = await getToken();
-              const response = await fetch(`${API_URL}/devices/simulators`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` },
-              });
+  // 3. FUNGSI PEMICU MODAL
+  const onDeletePress = () => {
+    setIsModalVisible(true);
+  };
 
-              const data = await response.json();
-              if (response.ok) {
-                setLogs((prev) => [`🗑️ ${data.message}`, ...prev]);
-                Alert.alert("Sukses", data.message);
-              } else {
-                throw new Error(data.message);
-              }
-            } catch (error: any) {
-              Alert.alert("Error", error.message);
-            } finally {
-              setIsDeleting(false);
-            }
-          },
-        },
-      ]
-    );
+  // 4. FUNGSI EKSEKUSI HAPUS (Dipanggil saat tombol "Hapus" di modal ditekan)
+  const handleConfirmDelete = async () => {
+    setIsModalVisible(false); // Tutup modal
+    setIsDeleting(true);
+
+    try {
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/devices/simulators`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setLogs((prev) => [`🗑️ ${data.message}`, ...prev]);
+        // Gunakan alert standar browser/native untuk sukses
+        alert(data.message);
+      } else {
+        throw new Error(data.message || "Gagal menghapus simulator");
+      }
+    } catch (error: any) {
+      console.error(error);
+      setLogs((prev) => [`❌ Error Hapus: ${error.message}`, ...prev]);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -154,6 +161,7 @@ export default function SimulatorScreen() {
       />
 
       <View style={{ gap: 10 }}>
+        {/* generate device button */}
         <Button
           title={
             isGenerating ? "Sedang Membuat..." : `Generate ${count} Perangkat`
@@ -162,14 +170,15 @@ export default function SimulatorScreen() {
           disabled={isGenerating}
         />
 
+        {/* delete button */}
         <Button
           title={isDeleting ? "Sedang Menghapus..." : "Hapus Semua Simulator"}
-          onPress={deleteAllSimulators}
+          onPress={onDeletePress}
           color="red" // Warna merah untuk tanda bahaya/hapus
           disabled={isGenerating || isDeleting}
         />
 
-        {/* Tombol Log */}
+        {/* Log */}
         <View
           style={{
             marginTop: 10,
@@ -203,6 +212,15 @@ export default function SimulatorScreen() {
           </ScrollView>
         </View>
       </View>
+
+      {/* delete confirm modal */}
+      <ConfirmModal
+        visible={isModalVisible}
+        title="Konfirmasi Hapus"
+        message="Apakah Anda yakin ingin menghapus SEMUA perangkat virtual simulator?"
+        onCancel={() => setIsModalVisible(false)}
+        onConfirm={handleConfirmDelete}
+      />
     </SafeAreaView>
   );
 }
