@@ -3,11 +3,15 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const http = require("http");
 const { Server } = require("socket.io");
+const { ClerkExpressWithAuth } = require("@clerk/clerk-sdk-node");
+
+process.env.CLERK_SECRET_KEY =
+  "sk_test_DfnKANUCdEmTHrNMLOPL4vpIX1U32VO62Kjyao8XQt";
 
 const app = express();
 const server = http.createServer(app);
 
-// 4. Inisialisasi Socket.IO dan atur CORS
+// Inisialisasi Socket.IO dan atur CORS
 const io = new Server(server, {
   cors: {
     origin: "*", // Izinkan semua origin, bisa diperketat nanti
@@ -27,17 +31,22 @@ app.use(
 );
 app.use(express.json());
 
-// 1. Definisi Schema (Struktur Data) dengan Mongoose
+// Middleware untuk memeriksa semua rute di bawah ini
+// ClerkExpressWithAuth akan mengekstrak `userId` dari token dan menaruhnya di `req.auth.userId`
+app.use(ClerkExpressWithAuth());
+
+// --- SKEMA DATABASE ---
 const deviceSchema = new mongoose.Schema({
+  _id: { type: String, required: true },
   name: { type: String, required: true },
   type: { type: String, required: true },
   isOn: { type: Boolean, default: false },
+  userId: { type: String, required: true, index: true },
 });
 
-// 2. Buat Model dari Schema
 const Device = mongoose.model("Device", deviceSchema);
 
-// SKEMA BARU: Untuk menyimpan informasi setiap sesi percobaan
+// SKEMA testSession: Untuk menyimpan informasi setiap sesi percobaan
 const testSessionSchema = new mongoose.Schema({
   deviceId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -45,7 +54,6 @@ const testSessionSchema = new mongoose.Schema({
     required: true,
   },
   startTime: { type: Date, default: Date.now },
-  // Kita bisa menambahkan data lain nanti, misal hasil throughput
 });
 const TestSession = mongoose.model("TestSession", testSessionSchema);
 
@@ -63,53 +71,198 @@ const performanceLogSchema = new mongoose.Schema({
 
 const PerformanceLog = mongoose.model("PerformanceLog", performanceLogSchema);
 
-// Ketika aplikasi client mengakses alamat ini, server akan merespons.
+const throughputLogSchema = new mongoose.Schema({
+  sessionId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "TestSession",
+    required: true,
+  },
+  result: { type: Number, required: true }, // Hasil dalam perintah/detik
+  timestamp: { type: Date, default: Date.now },
+});
+const ThroughputLog = mongoose.model("ThroughputLog", throughputLogSchema);
+
+// --- RUTE API ---
+
 app.get("/", (req, res) => {
-  res.send("Halo, ini adalah server untuk aplikasi Smarthome!");
+  res.send(
+    "Halo, ini adalah server untuk aplikasi iot online controller!, untuk info lebih lanjut hubungi zikrinur.official@gmail.com"
+  );
 });
 
 // Endpoint untuk mendapatkan semua perangkat
 app.get("/devices", async (req, res) => {
   try {
-    const devices = await Device.find();
+    // 1. Log untuk debugging (Cek apakah request sampai sini)
+    console.log("Menerima request GET /devices...");
+
+    // 2. CEK KEAMANAN: Pastikan req.auth ada sebelum akses userId
+    // Jika req.auth undefined, akses req.auth.userId akan bikin server CRASH
+    if (!req.auth || !req.auth.userId) {
+      console.log("Gagal: User tidak terdeteksi oleh Clerk");
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+    }
+
+    console.log(`User ID terdeteksi: ${req.auth.userId}`);
+
+    // 3. Filter data berdasarkan userId
+    const devices = await Device.find({ userId: req.auth.userId });
     res.json(devices);
   } catch (error) {
-    res.status(500).json({ message: "Gagal mengambil data perangkat", error });
+    // 4. Log error lengkap ke TERMINAL SERVER
+    console.error("SERVER ERROR di GET /devices:", error);
+
+    // 5. Kirim pesan JSON (jangan kirim objek error mentah yang bisa bikin crash lagi)
+    res.status(500).json({
+      message: "Gagal mengambil data perangkat di server",
+      error: error.message,
+    });
   }
 });
 
 // Endpoint untuk menambahkan perangkat baru
 app.post("/devices", async (req, res) => {
   try {
-    const { name, type } = req.body; // Ambil nama dan tipe dari body request
+    // if (!req.auth.userId)
+    //   return res.status(401).json({ message: "Tidak terautentikasi" });
+
+    if (!req.auth || !req.auth.userId) {
+      console.log("Gagal: User tidak terautentikasi");
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+    }
+    const { name, type, macAddress } = req.body; // Ambil nama dan tipe dari body request
 
     // Validasi sederhana
-    if (!name || !type) {
-      return res
-        .status(400)
-        .json({ message: "Nama dan tipe perangkat harus diisi" });
+    if (!name || !type || !macAddress) {
+      return res.status(400).json({ message: "Semua Kolom Harus Diisi" });
     }
 
     const newDevice = new Device({
+      _id: macAddress,
       name,
       type,
       isOn: false, // Perangkat baru selalu dalam keadaan mati
+      userId: req.auth.userId,
     });
 
     await newDevice.save(); // Simpan perangkat baru ke database
-    io.emit("devices_updated"); // <-- KIRIM EVENT
-    console.log(`Perangkat baru ditambahkan: ${name}`);
+    // Note: Socket.IO belum diamankan, jadi emit ke semua dulu sementara
+    // io.emit("devices_updated"); // <-- KIRIM EVENT
+    // Cek apakah io terdefinisi sebelum emit
+    if (typeof io !== "undefined") {
+      io.emit("devices_updated");
+    }
+    console.log(`Perangkat baru ditambahkan: ${name} oleh ${req.auth.userId}`);
     res.status(201).json(newDevice); // Kirim kembali data perangkat yang baru dibuat
   } catch (error) {
-    res.status(500).json({ message: "Gagal menambahkan perangkat", error });
+    // Handle error jika MAC Address duplikat
+    if (error.code === 11000) {
+      return res
+        .status(400)
+        .json({ message: "Perangkat dengan MAC Address ini sudah ada" });
+    }
+    console.error("SERVER ERROR saat tambah perangkat:", error);
+    res.status(500).json({
+      message: "Gagal menambahkan perangkat",
+      error: error.message, // Hanya kirim pesannya saja
+    });
+  }
+});
+
+// Endpoint untuk mendapatkan satu perangkat berdasarkan ID
+app.get("/devices/:id", async (req, res) => {
+  try {
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+
+    // Cari perangkat dengan ID tersebut DAN userId pemilik
+    const device = await Device.findOne({
+      _id: req.params.id,
+      userId: req.auth.userId,
+    });
+
+    if (device) {
+      res.json(device);
+    } else {
+      res.status(404).json({ message: "Perangkat tidak ditemukan" });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Gagal mengambil data perangkat", error });
+  }
+});
+
+// Endpoint untuk mengedit (update) nama perangkat
+app.put("/devices/:id", async (req, res) => {
+  try {
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+
+    const { name } = req.body; // Ambil nama baru dari body
+
+    // validasi sederhana
+    if (!name) {
+      return res.status(400).json({ message: "Nama tidak boleh kosong" });
+    }
+
+    const device = await Device.findOneAndUpdate(
+      { name: name }, // Data yang ingin diupdate
+      { new: true }, // Opsi untuk mengembalikan dokumen yang sudah ter-update
+      {
+        _id: req.params.id,
+        userId: req.auth.userId,
+      }
+    );
+
+    if (device) {
+      io.emit("devices_updated"); // <-- KIRIM EVENT
+      console.log(`Perangkat diperbarui: ${device.name}`);
+      res.json(device);
+    } else {
+      res
+        .status(404)
+        .json({ message: "Perangkat tidak ditemukan atau akses ditolak  " });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Gagal memperbarui perangkat", error });
+  }
+});
+
+// Endpoint untuk menghapus perangkat berdasarkan ID
+app.delete("/devices/:id", async (req, res) => {
+  try {
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+
+    const device = await Device.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.auth.userId,
+    });
+
+    if (device) {
+      io.emit("devices_updated"); // <-- KIRIM EVENT
+      console.log(`Perangkat dihapus: ${device.name}`);
+      // Mengirim konfirmasi kembali ke client
+      res.status(200).json({ message: "Perangkat berhasil dihapus" });
+    } else {
+      res
+        .status(404)
+        .json({ message: "Perangkat tidak ditemukan atau akses ditolak" });
+    }
+  } catch (error) {
+    res.status(500).json({ message: "Gagal menghapus perangkat", error });
   }
 });
 
 // Endpoint untuk mengubah status (toggle) perangkat berdasarkan ID
 app.post("/devices/:id/toggle", async (req, res) => {
   try {
-    const deviceId = req.params.id;
-    const device = await Device.findById(deviceId);
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Tidak terautentikasi" });
+
+    const device = await Device.findOne({
+      _id: req.params.id,
+      userId: req.auth.userId,
+    });
 
     if (device) {
       device.isOn = !device.isOn;
@@ -120,86 +273,16 @@ app.post("/devices/:id/toggle", async (req, res) => {
       );
       res.json(device);
     } else {
-      res.status(404).send("Perangkat tidak ditemukan");
+      res.status(404).send("Perangkat tidak ditemukan atau akses ditolak");
     }
   } catch (error) {
     res.status(500).json({ message: "Gagal mengubah status perangkat", error });
   }
 });
 
-// Endpoint untuk mengedit (update) nama perangkat
-app.put("/devices/:id", async (req, res) => {
-  try {
-    const { name } = req.body; // Ambil nama baru dari body
-    if (!name) {
-      return res.status(400).json({ message: "Nama tidak boleh kosong" });
-    }
+// --- RUTE API UNTUK SESI & LOG ---
 
-    const device = await Device.findByIdAndUpdate(
-      req.params.id,
-      { name: name }, // Data yang ingin diupdate
-      { new: true } // Opsi untuk mengembalikan dokumen yang sudah ter-update
-    );
-
-    if (device) {
-      io.emit("devices_updated"); // <-- KIRIM EVENT
-      console.log(`Perangkat diperbarui: ${device.name}`);
-      res.json(device);
-    } else {
-      res.status(404).json({ message: "Perangkat tidak ditemukan" });
-    }
-  } catch (error) {
-    res.status(500).json({ message: "Gagal memperbarui perangkat", error });
-  }
-});
-
-// Endpoint untuk mendapatkan satu perangkat berdasarkan ID
-app.get("/devices/:id", async (req, res) => {
-  try {
-    const device = await Device.findById(req.params.id);
-    if (device) {
-      res.json(device);
-    } else {
-      res.status(404).json({ message: "Perangkat tidak ditemukan" });
-    }
-  } catch (error) {
-    res.status(500).json({ message: "Gagal mengambil data perangkat", error });
-  }
-});
-
-// Endpoint untuk menghapus perangkat berdasarkan ID
-app.delete("/devices/:id", async (req, res) => {
-  try {
-    const device = await Device.findByIdAndDelete(req.params.id);
-
-    if (device) {
-      io.emit("devices_updated"); // <-- KIRIM EVENT
-      console.log(`Perangkat dihapus: ${device.name}`);
-      // Mengirim konfirmasi kembali ke client
-      res.status(200).json({ message: "Perangkat berhasil dihapus" });
-    } else {
-      res.status(404).json({ message: "Perangkat tidak ditemukan" });
-    }
-  } catch (error) {
-    res.status(500).json({ message: "Gagal menghapus perangkat", error });
-  }
-});
-
-// Endpoint untuk mengambil semua log performa untuk satu perangkat
-app.get("/devices/:id/logs", async (req, res) => {
-  try {
-    const logs = await PerformanceLog.find({ deviceId: req.params.id })
-      .sort({ timestamp: -1 })
-      .limit(50);
-    res.json(logs);
-  } catch (error) {
-    res
-      .status(500)
-      .json({ message: "Failed to fetch performance logs", error });
-  }
-});
-
-// 1. Endpoint untuk membuat sesi tes baru
+// Endpoint untuk membuat sesi tes baru
 app.post("/sessions", async (req, res) => {
   try {
     const { deviceId } = req.body;
@@ -214,7 +297,7 @@ app.post("/sessions", async (req, res) => {
   }
 });
 
-// 2. Endpoint untuk mendapatkan semua riwayat sesi untuk satu perangkat
+// Endpoint untuk mendapatkan semua riwayat sesi untuk satu perangkat
 app.get("/devices/:deviceId/sessions", async (req, res) => {
   try {
     const sessions = await TestSession.find({
@@ -226,7 +309,7 @@ app.get("/devices/:deviceId/sessions", async (req, res) => {
   }
 });
 
-// 3. Endpoint untuk menyimpan log performa baru untuk sebuah sesi
+// Endpoint untuk menyimpan log performa baru untuk sebuah sesi
 app.post("/logs", async (req, res) => {
   try {
     const { sessionId, delay } = req.body;
@@ -247,7 +330,7 @@ app.post("/logs", async (req, res) => {
   }
 });
 
-// 4. Endpoint untuk mendapatkan semua log untuk satu sesi tertentu
+//  Endpoint untuk mendapatkan semua log untuk satu sesi tertentu
 app.get("/sessions/:sessionId/logs", async (req, res) => {
   try {
     const logs = await PerformanceLog.find({
@@ -260,6 +343,53 @@ app.get("/sessions/:sessionId/logs", async (req, res) => {
       .json({ message: "Failed to fetch logs for session", error });
   }
 });
+
+// Endpoint untuk menyimpan log throughput baru
+app.post("/throughput-logs", async (req, res) => {
+  try {
+    const { sessionId, result } = req.body;
+    if (!sessionId || result == null) {
+      return res
+        .status(400)
+        .json({ message: "sessionId and result are required" });
+    }
+    const log = new ThroughputLog({ sessionId, result });
+    await log.save();
+    io.emit("throughput_log_updated", { sessionId });
+    res.status(201).json(log);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to save throughput log", error });
+  }
+});
+
+// 6. Endpoint untuk mendapatkan log throughput dengan paginasi
+app.get("/sessions/:sessionId/throughput-logs", async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = 10;
+    const skip = (page - 1) * limit;
+
+    const logs = await ThroughputLog.find({ sessionId: req.params.sessionId })
+      .sort({ timestamp: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const totalLogs = await ThroughputLog.countDocuments({
+      sessionId: req.params.sessionId,
+    });
+    const totalPages = Math.ceil(totalLogs / limit);
+
+    res.json({
+      logs,
+      currentPage: page,
+      totalPages,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to fetch throughput logs", error });
+  }
+});
+
+// SOCKET
 
 // Logika koneksi Socket.IO
 io.on("connection", (socket) => {
@@ -298,19 +428,8 @@ const startServer = async () => {
     await mongoose.connect(MONGO_URI);
     console.log("Berhasil terhubung ke MongoDB!");
 
-    // Cek apakah ada data, jika tidak ada, tambahkan data awal
-    const deviceCount = await Device.countDocuments();
-    if (deviceCount === 0) {
-      await Device.insertMany([
-        { name: "Lampu Ruang Tamu", type: "light", isOn: false },
-        { name: "Lampu Kamar Tidur", type: "light", isOn: true },
-        { name: "Kipas Angin", type: "fan", isOn: false },
-      ]);
-      console.log("Data awal berhasil ditambahkan ke MongoDB.");
-    }
-
     server.listen(port, () => {
-      console.log(`Server Smarthome berjalan di http://localhost:${port}`);
+      console.log(`Server Smarthome berjalan di (ip):${port}`);
     });
   } catch (error) {
     console.error("Gagal terhubung ke database:", error);
