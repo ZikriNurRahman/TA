@@ -227,6 +227,34 @@ app.put("/devices/:id", async (req, res) => {
   }
 });
 
+// Endpoint KHUSUS untuk menghapus semua perangkat simulator milik user
+app.delete("/devices/simulators", async (req, res) => {
+  try {
+    // Cek login
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Unauthorized" });
+
+    // Hapus semua device yang tipenya 'simulator' DAN milik user ini
+    const result = await Device.deleteMany({
+      userId: req.auth.userId,
+      type: "simulator", // Kunci agar perangkat asli tidak terhapus
+    });
+
+    io.emit("devices_updated"); // Beritahu semua client untuk refresh
+    console.log(
+      `Menghapus ${result.deletedCount} simulator untuk user ${req.auth.userId}`
+    );
+
+    res.json({
+      message: `Berhasil menghapus ${result.deletedCount} perangkat simulator.`,
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Gagal menghapus simulator", error: error.message });
+  }
+});
+
 // Endpoint untuk menghapus perangkat berdasarkan ID
 app.delete("/devices/:id", async (req, res) => {
   try {

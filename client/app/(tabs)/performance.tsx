@@ -90,7 +90,14 @@ export default function PerformanceScreen() {
     // Inisialisasi koneksi socket
     socketRef.current = io(API_URL);
 
+    // UPDATE OTOMATIS SAAT DEVICE BERTAMBAH
+    socketRef.current.on("devices_updated", () => {
+      console.log("🔄 Refreshing devices list...");
+      fetchDevices();
+    });
+
     return () => {
+      socketRef.current?.off("devices_updated");
       socketRef.current?.disconnect();
       if (intervalRef.current)
         clearInterval(intervalRef.current as NodeJS.Timeout);
