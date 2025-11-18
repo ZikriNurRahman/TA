@@ -49,7 +49,7 @@ const Device = mongoose.model("Device", deviceSchema);
 // SKEMA testSession: Untuk menyimpan informasi setiap sesi percobaan
 const testSessionSchema = new mongoose.Schema({
   deviceId: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,
     ref: "Device",
     required: true,
   },
@@ -81,6 +81,32 @@ const throughputLogSchema = new mongoose.Schema({
   timestamp: { type: Date, default: Date.now },
 });
 const ThroughputLog = mongoose.model("ThroughputLog", throughputLogSchema);
+
+// --- FUNGSI HELPER UNTUK HAPUS DATA TERKAIT ---
+// Fungsi ini akan menghapus semua Sesi dan Log yang terkait dengan daftar Device ID tertentu
+const deleteRelatedData = async (deviceIds) => {
+  try {
+    // 1. Cari semua sesi yang dimiliki oleh device-device ini
+    const sessions = await TestSession.find({ deviceId: { $in: deviceIds } });
+    const sessionIds = sessions.map((s) => s._id);
+
+    if (sessionIds.length > 0) {
+      // 2. Hapus semua Performance Log terkait sesi-sesi tersebut
+      await PerformanceLog.deleteMany({ sessionId: { $in: sessionIds } });
+
+      // 3. Hapus semua Throughput Log terkait sesi-sesi tersebut
+      await ThroughputLog.deleteMany({ sessionId: { $in: sessionIds } });
+
+      // 4. Hapus Sesi itu sendiri
+      await TestSession.deleteMany({ _id: { $in: sessionIds } });
+
+      console.log(`Deleted ${sessionIds.length} sessions and their logs.`);
+    }
+  } catch (error) {
+    console.error("Error deleting related data:", error);
+    throw error;
+  }
+};
 
 // --- RUTE API ---
 
@@ -227,27 +253,35 @@ app.put("/devices/:id", async (req, res) => {
   }
 });
 
-// Endpoint KHUSUS untuk menghapus semua perangkat simulator milik user
+// Endpoint KHUSUS untuk menghapus semua perangkat simulator milik user (Hapus juga riwayatnya)
 app.delete("/devices/simulators", async (req, res) => {
   try {
-    // Cek login
     if (!req.auth.userId)
       return res.status(401).json({ message: "Unauthorized" });
 
-    // Hapus semua device yang tipenya 'simulator' DAN milik user ini
-    const result = await Device.deleteMany({
+    // 1. Cari dulu semua simulator milik user ini untuk mendapatkan ID-nya
+    const simulators = await Device.find({
       userId: req.auth.userId,
-      type: "simulator", // Kunci agar perangkat asli tidak terhapus
+      type: "simulator",
     });
+    const simulatorIds = simulators.map((d) => d._id);
 
-    io.emit("devices_updated"); // Beritahu semua client untuk refresh
-    console.log(
-      `Menghapus ${result.deletedCount} simulator untuk user ${req.auth.userId}`
-    );
+    if (simulatorIds.length > 0) {
+      // 2. Hapus data terkait (Sesi & Log) untuk semua simulator ini
+      await deleteRelatedData(simulatorIds);
 
-    res.json({
-      message: `Berhasil menghapus ${result.deletedCount} perangkat simulator.`,
-    });
+      // 3. Hapus Perangkat Simulator
+      const result = await Device.deleteMany({
+        _id: { $in: simulatorIds },
+      });
+
+      io.emit("devices_updated");
+      res.json({
+        message: `Berhasil menghapus ${result.deletedCount} simulator dan riwayatnya.`,
+      });
+    } else {
+      res.json({ message: "Tidak ada simulator untuk dihapus." });
+    }
   } catch (error) {
     res
       .status(500)
@@ -255,29 +289,62 @@ app.delete("/devices/simulators", async (req, res) => {
   }
 });
 
-// Endpoint untuk menghapus perangkat berdasarkan ID
+// Endpoint untuk menghapus perangkat berdasarkan ID (Hapus juga riwayatnya)
 app.delete("/devices/:id", async (req, res) => {
   try {
     if (!req.auth.userId)
       return res.status(401).json({ message: "Tidak terautentikasi" });
 
+    // 1. Hapus data terkait dulu (Sesi, Log Delay, Log Throughput)
+    await deleteRelatedData([req.params.id]);
+
+    // 2. Hapus Perangkat
     const device = await Device.findOneAndDelete({
       _id: req.params.id,
       userId: req.auth.userId,
     });
 
     if (device) {
-      io.emit("devices_updated"); // <-- KIRIM EVENT
-      console.log(`Perangkat dihapus: ${device.name}`);
-      // Mengirim konfirmasi kembali ke client
-      res.status(200).json({ message: "Perangkat berhasil dihapus" });
-    } else {
+      io.emit("devices_updated");
       res
-        .status(404)
-        .json({ message: "Perangkat tidak ditemukan atau akses ditolak" });
+        .status(200)
+        .json({ message: "Perangkat dan riwayatnya berhasil dihapus" });
+    } else {
+      res.status(404).json({ message: "Perangkat tidak ditemukan" });
     }
   } catch (error) {
-    res.status(500).json({ message: "Gagal menghapus perangkat", error });
+    res.status(500).json({ message: "Gagal menghapus", error: error.message });
+  }
+});
+
+// --- RUTE KHUSUS: RESET TOTAL RIWAYAT ---
+// Endpoint ini akan menghapus SEMUA data riwayat (Log & Sesi) tapi MEMBIARKAN user & device
+app.delete("/admin/reset-history", async (req, res) => {
+  try {
+    // Cek otentikasi agar tidak sembarang orang bisa reset
+    if (!req.auth.userId)
+      return res.status(401).json({ message: "Unauthorized" });
+
+    // 1. Hapus Semua Log Performa (Delay)
+    await PerformanceLog.deleteMany({});
+
+    // 2. Hapus Semua Log Throughput
+    await ThroughputLog.deleteMany({});
+
+    // 3. Hapus Semua Sesi Tes
+    await TestSession.deleteMany({});
+
+    console.log(`Reset total riwayat oleh user ${req.auth.userId}`);
+
+    res.json({
+      message:
+        "Database riwayat BERHASIL dibersihkan total. Semua log lama hilang.",
+    });
+  } catch (error) {
+    console.error("Gagal reset:", error);
+    res
+      .status(500)
+      .json({ message: "Gagal reset database", error: error.message });
   }
 });
 

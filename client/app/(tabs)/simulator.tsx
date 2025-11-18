@@ -104,12 +104,26 @@ export default function SimulatorScreen() {
     }
   };
 
-  // 3. FUNGSI PEMICU MODAL
+  // FUNGSI PEMICU MODAL
   const onDeletePress = () => {
     setIsModalVisible(true);
   };
 
-  // 4. FUNGSI EKSEKUSI HAPUS (Dipanggil saat tombol "Hapus" di modal ditekan)
+  const resetHistoryDatabase = async () => {
+    try {
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/admin/reset-history`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      alert(data.message);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  // FUNGSI EKSEKUSI HAPUS (Dipanggil saat tombol "Hapus" di modal ditekan)
   const handleConfirmDelete = async () => {
     setIsModalVisible(false); // Tutup modal
     setIsDeleting(true);
@@ -177,6 +191,14 @@ export default function SimulatorScreen() {
           color="red" // Warna merah untuk tanda bahaya/hapus
           disabled={isGenerating || isDeleting}
         />
+
+        {/* BUTTON KHUSUS: hapus semua riwayat tes */}
+        {/* AKTIFKAN KALAU BUTUH AJA */}
+        {/* <Button
+          title="RESET TOTAL DATABASE RIWAYAT"
+          onPress={resetHistoryDatabase}
+          color="orange"
+        /> */}
 
         {/* Log */}
         <View
