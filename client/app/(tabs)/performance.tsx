@@ -8,62 +8,54 @@ import {
   Alert,
   Pressable,
   ActivityIndicator,
-  TouchableOpacity,
   Switch,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { LineChart } from "react-native-chart-kit";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { io, Socket } from "socket.io-client";
-
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Device } from "@/types/Device";
 import { PerformanceLog } from "@/types/PerformanceLog";
 import { TestSession } from "@/types/TestSession";
 import { ThroughputLog } from "@/types/ThroughputLog";
-
 import { performanceStyles as styles } from "@/styles/styles";
 import { Colors } from "@/constants/Colors";
 import { API_URL } from "@/constants/api";
-import { useAuth } from "@clerk/clerk-expo";
+import { exportBatchToCSV } from "@/utils/csvExporter";
 
 export default function PerformanceScreen() {
-  // Gunakan useRef agar koneksi stabil dan tidak menyebabkan render ulang
   const socketRef = useRef<Socket | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | number | null>(null);
+  const { getToken } = useAuth();
+  const { user } = useUser();
 
-  // State untuk data utama
+  // State Data
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
-
-  // State untuk riwayat dan sesi
   const [sessions, setSessions] = useState<TestSession[]>([]);
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null
   );
-  const [activeSessionMap, setActiveSessionMap] = useState<
-    Record<string, string>
-  >({});
-
-  // State untuk Log Delay & Status
   const [logs, setLogs] = useState<PerformanceLog[]>([]);
-  const [isDelayTesting, setIsDelayTesting] = useState(false);
 
-  // State untuk Log Throughput & Status
+  // State Tes
+  const [isDelayTesting, setIsDelayTesting] = useState(false);
   const [isThroughputTesting, setIsThroughputTesting] = useState(false);
   const [throughputLogs, setThroughputLogs] = useState<ThroughputLog[]>([]);
+
+  // State Multi-Device & Batch Export
+  const [isMultiDeviceMode, setIsMultiDeviceMode] = useState(false);
+  // Menyimpan daftar sesi dari tes terakhir (untuk ekspor massal)
+  const [lastBatchSessions, setLastBatchSessions] = useState<
+    { sessionId: string; deviceId: string }[]
+  >([]);
+
+  // Paginasi
   const [throughputPage, setThroughputPage] = useState(1);
   const [totalThroughputPages, setTotalThroughputPages] = useState(1);
 
-  // --- MODE SERENTAK ---
-  const [isMultiDeviceMode, setIsMultiDeviceMode] = useState(false);
-
-  // ambil token
-  const { getToken } = useAuth();
-
-  // -- FUNGSI-FUNGSI LOGIKA --
-
-  // -- SETUP AWAL
-  // Fetch semua perangkat untuk ditampilkan di dropdown
+  // --- SETUP AWAL ---
   useEffect(() => {
     const fetchDevices = async () => {
       try {
@@ -71,54 +63,41 @@ export default function PerformanceScreen() {
         const response = await fetch(`${API_URL}/devices`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-
         if (!response.ok) throw new Error("Gagal ambil perangkat");
-
         const data = await response.json();
         if (Array.isArray(data)) {
           setDevices(data);
-          if (data.length > 0) {
-            setSelectedDevice(data[0]);
-          }
-        } else {
-          console.error("Data perangkat bukan array:", data);
+          if (data.length > 0 && !selectedDevice) setSelectedDevice(data[0]);
         }
       } catch (error) {
-        console.error("Gagal mengambil perangkat:", error);
+        console.error(error);
       }
     };
-
     fetchDevices();
 
-    // Inisialisasi koneksi socket
     socketRef.current = io(API_URL);
-
-    // UPDATE OTOMATIS SAAT DEVICE BERTAMBAH
-    socketRef.current.on("devices_updated", () => {
-      console.log("🔄 Refreshing devices list...");
-      fetchDevices();
-    });
+    socketRef.current.on("devices_updated", () => fetchDevices());
 
     return () => {
-      socketRef.current?.off("devices_updated");
       socketRef.current?.disconnect();
       if (intervalRef.current)
         clearInterval(intervalRef.current as NodeJS.Timeout);
     };
   }, []);
 
-  // LISTENER SOCKET (Di-update saat sesi berubah)
+  // --- LISTENER SOCKET ---
   useEffect(() => {
     const socket = socketRef.current;
     if (!socket) return;
 
-    // Bersihkan listener lama agar tidak duplikat
     socket.off("log_updated");
     socket.off("throughput_log_updated");
 
     const handleLogUpdate = ({ sessionId }: { sessionId: string }) => {
+      // Update hanya jika sesi ini sedang dilihat ATAU kita sedang mode multi-device (opsional)
       if (sessionId === selectedSessionId) fetchLogs(sessionId);
     };
+
     const handleThroughputUpdate = ({ sessionId }: { sessionId: string }) => {
       if (sessionId === selectedSessionId) fetchThroughputLogs(sessionId, 1);
     };
@@ -126,14 +105,13 @@ export default function PerformanceScreen() {
     socket.on("log_updated", handleLogUpdate);
     socket.on("throughput_log_updated", handleThroughputUpdate);
 
-    // Cleanup
     return () => {
-      socket.off("log_updated", handleLogUpdate);
-      socket.off("throughput_log_updated", handleThroughputUpdate);
+      socket.off("log_updated");
+      socket.off("throughput_log_updated");
     };
   }, [selectedSessionId]);
 
-  // Fetch riwayat sesi setiap kali perangkat diganti
+  // --- LOGIKA FETCH DATA ---
   const fetchSessions = useCallback(
     async (deviceId: string) => {
       try {
@@ -144,74 +122,63 @@ export default function PerformanceScreen() {
             headers: { Authorization: `Bearer ${token}` },
           }
         );
-
-        if (!response.ok) throw new Error("Gagal ambil sesi");
-
         const data: TestSession[] = await response.json();
         setSessions(data);
 
-        // Logic reset pilihan sesi
-        // Jika sedang testing, jangan ubah selectedSessionId kecuali user memaksa
-        // Jika tidak testing, otomatis pilih sesi terbaru
-        if (!isDelayTesting && data.length > 0) {
-          // Cek apakah device ini punya sesi yang sedang aktif berjalan?
-          const runningSessionId = activeSessionMap[deviceId];
-          if (runningSessionId) {
-            setSelectedSessionId(runningSessionId);
-          } else if (
-            !selectedSessionId ||
-            sessions.findIndex((s) => s._id === selectedSessionId) === -1
-          ) {
-            setSelectedSessionId(data[0]._id);
+        // Auto select sesi terbaru jika tidak sedang tes
+        if (!isDelayTesting && data.length > 0 && !selectedSessionId) {
+          // Jika batch session kosong (baru buka app), anggap sesi terbaru device ini sebagai batch tunggal
+          if (lastBatchSessions.length === 0) {
+            setLastBatchSessions([{ sessionId: data[0]._id, deviceId }]);
           }
-        } else if (!isDelayTesting && data.length === 0) {
+          setSelectedSessionId(data[0]._id);
+        } else if (data.length === 0) {
           setSelectedSessionId(null);
           setLogs([]);
           setThroughputLogs([]);
         }
       } catch (error) {
-        console.error("Gagal mengambil sesi:", error);
+        console.error(error);
       }
     },
-    [isDelayTesting, getToken, selectedSessionId, activeSessionMap]
+    [isDelayTesting, getToken, selectedSessionId, lastBatchSessions]
   );
 
   useEffect(() => {
     if (selectedDevice) {
-      // Saat ganti device, reset log view dulu
-      setLogs([]);
-      setThroughputLogs([]);
-      fetchSessions(selectedDevice._id);
+      // Jangan reset jika sedang tes multi-device
+      if (!isDelayTesting && !isMultiDeviceMode) {
+        setSelectedSessionId(null);
+        fetchSessions(selectedDevice._id);
+      }
     }
   }, [selectedDevice]);
 
   const fetchLogs = async (sessionId: string) => {
     try {
       const token = await getToken();
-      const response = await fetch(`${API_URL}/sessions/${sessionId}/logs`, {
+      const res = await fetch(`${API_URL}/sessions/${sessionId}/logs`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!response.ok) throw new Error("Gagal ambil logs");
-      setLogs(await response.json());
+      setLogs(await res.json());
     } catch (error) {
-      console.error("Gagal ambil log delay:", error);
+      console.error(error);
     }
   };
 
   const fetchThroughputLogs = async (sessionId: string, page: number) => {
     try {
       const token = await getToken();
-      const response = await fetch(
+      const res = await fetch(
         `${API_URL}/sessions/${sessionId}/throughput-logs?page=${page}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (!response.ok) throw new Error("Gagal ambil log throughput");
-      const data = await response.json();
+      const data = await res.json();
       setThroughputLogs(data.logs);
       setThroughputPage(data.currentPage);
       setTotalThroughputPages(data.totalPages);
     } catch (error) {
-      console.error("Gagal ambil log throughput:", error);
+      console.error(error);
     }
   };
 
@@ -224,23 +191,22 @@ export default function PerformanceScreen() {
 
   // --- FUNGSI TES DELAY ---
   const startDelayTest = async () => {
-    if (!selectedDevice) return;
+    if (!selectedDevice && !isMultiDeviceMode) return;
     if (intervalRef.current)
       clearInterval(intervalRef.current as NodeJS.Timeout);
 
+    setLogs([]);
+    setThroughputLogs([]);
+
     // Tentukan target: 1 device atau SEMUA device
-    const targets = isMultiDeviceMode ? devices : [selectedDevice];
-
+    const targets = isMultiDeviceMode ? devices : [selectedDevice!];
     if (targets.length === 0) return;
-
-    setLogs([]); // Kosongkan tampilan lokal
 
     try {
       const token = await getToken();
-      const newSessionMap: Record<string, string> = {};
+      const newBatch: { sessionId: string; deviceId: string }[] = [];
 
-      // 1. Buat Sesi untuk SETIAP target secara paralel
-      // Ini agar Device 2, Device 3, dst punya sesi masing-masing
+      // 1. Buat Sesi untuk SETIAP target (Batch Session)
       const sessionPromises = targets.map(async (device) => {
         const response = await fetch(`${API_URL}/sessions`, {
           method: "POST",
@@ -252,56 +218,39 @@ export default function PerformanceScreen() {
         });
         if (response.ok) {
           const session = await response.json();
-          newSessionMap[device._id] = session._id;
+          newBatch.push({ sessionId: session._id, deviceId: device._id });
         }
       });
 
       await Promise.all(sessionPromises);
 
-      // Update state
-      setActiveSessionMap(newSessionMap);
-      setIsDelayTesting(true);
+      // Simpan info batch ini untuk ekspor nanti
+      setLastBatchSessions(newBatch);
 
-      // Jika device yang sedang dilihat (selectedDevice) punya sesi baru, tampilkan itu
-      if (selectedDevice && newSessionMap[selectedDevice._id]) {
-        setSelectedSessionId(newSessionMap[selectedDevice._id]);
-        // Refresh list sesi agar sesi baru muncul di riwayat
-        fetchSessions(selectedDevice._id);
+      // Tampilkan sesi milik device yg sedang dipilih di picker
+      const currentDeviceSession = newBatch.find(
+        (s) => s.deviceId === selectedDevice?._id
+      );
+      if (currentDeviceSession) {
+        setSelectedSessionId(currentDeviceSession.sessionId);
+        fetchSessions(selectedDevice!._id); // Refresh list
       }
 
-      // Mulai Interval Ping
-      const interval = setInterval(() => runPingBatch(newSessionMap), 1000);
+      setIsDelayTesting(true);
+
+      // Mulai Ping Loop
+      const interval = setInterval(() => runPingBatch(newBatch), 1000);
       intervalRef.current = interval;
     } catch (error) {
-      console.error("Gagal membuat sesi:", error);
-      Alert.alert("Error", "Gagal memulai sesi tes.");
+      console.error("Gagal mulai tes:", error);
     }
   };
 
-  const stopDelayTest = () => {
-    if (intervalRef.current)
-      clearInterval(intervalRef.current as NodeJS.Timeout);
-    intervalRef.current = null;
-    setIsDelayTesting(false);
-    setActiveSessionMap({}); // Reset map sesi aktif
-
-    // Refresh tampilan akhir
-    if (selectedDevice) fetchSessions(selectedDevice._id);
-  };
-
-  // Mengirim Ping ke SEMUA sesi aktif
-  const runPingBatch = async (sessionMap: Record<string, string>) => {
-    const socket = socketRef.current;
-    if (!socket) return;
-
-    const sessionIds = Object.values(sessionMap);
-
-    // Kirim ping untuk setiap sesi
-    // Kita pakai Promise.all untuk mengirim serentak
-    sessionIds.forEach((sessionId) => {
-      const startTime = Date.now();
-      socket.emit("ping", () => {
-        const delay = Date.now() - startTime;
+  const runPingBatch = (batch: { sessionId: string }[]) => {
+    batch.forEach(({ sessionId }) => {
+      const start = Date.now();
+      socketRef.current?.emit("ping", () => {
+        const delay = Date.now() - start;
         saveLog(sessionId, delay);
       });
     });
@@ -318,52 +267,58 @@ export default function PerformanceScreen() {
         },
         body: JSON.stringify({ sessionId, delay }),
       });
-    } catch (error) {
-      console.error("Gagal simpan log:", error);
+    } catch (e) {
+      console.error(e);
     }
+  };
+
+  const stopDelayTest = () => {
+    if (intervalRef.current)
+      clearInterval(intervalRef.current as NodeJS.Timeout);
+    setIsDelayTesting(false);
+    if (selectedDevice) fetchSessions(selectedDevice._id);
   };
 
   // --- FUNGSI TES THROUGHPUT ---
   const startThroughputTest = () => {
-    // Cek apakah ada sesi aktif (minimal satu)
-    const sessionIds = Object.values(activeSessionMap);
-    if (sessionIds.length === 0) {
+    // Cek apakah kita punya batch sesi yang valid
+    if (lastBatchSessions.length === 0) {
       Alert.alert("Info", "Mulai Tes Delay dulu agar sesi terbentuk.");
       return;
     }
 
     setIsThroughputTesting(true);
     let commandsAcknowledged = 0;
-    const testDuration = 5000; // 5 detik
-    const commandsPerSecond = 50; // Target total beban ke server
-
-    // Jika multi-device, kita bagi beban atau kali beban?
-    // Untuk stress test: Total beban server = commandsPerSecond.
-    // Kita akan acak device mana yang menerima perintah.
-
+    const testDuration = 5000;
+    const commandsPerSecond = 50;
     const totalCommands = (testDuration / 1000) * commandsPerSecond;
 
     const interval = setInterval(() => {
       if (commandsAcknowledged >= totalCommands) return;
 
-      // Pilih device target secara acak dari yang sedang aktif
-      const deviceIds = Object.keys(activeSessionMap);
-      const randomDeviceId =
-        deviceIds[Math.floor(Math.random() * deviceIds.length)];
+      // Pilih target acak dari batch yang sedang aktif
+      const randomSession =
+        lastBatchSessions[Math.floor(Math.random() * lastBatchSessions.length)];
 
-      socketRef.current?.emit("toggle_device", randomDeviceId, (res: any) => {
-        if (res?.success) commandsAcknowledged++;
-      });
+      socketRef.current?.emit(
+        "toggle_device",
+        randomSession.deviceId,
+        (res: any) => {
+          if (res?.success) commandsAcknowledged++;
+        }
+      );
     }, 1000 / commandsPerSecond);
 
     setTimeout(() => {
       clearInterval(interval);
       setIsThroughputTesting(false);
-      const result = commandsAcknowledged / (testDuration / 1000); // Total throughput sistem
 
-      // Simpan hasil yang sama ke SEMUA sesi aktif agar grafik muncul di semua device
-      sessionIds.forEach((sid) => {
-        saveThroughputLog(sid, result);
+      const result = commandsAcknowledged / (testDuration / 1000);
+
+      // Simpan hasil ke SEMUA sesi di batch ini (asumsi throughput sistem terbagi rata)
+      // Atau bisa juga simpan ke satu sesi 'master', tapi biar grafik muncul di semua device, kita simpan ke semua.
+      lastBatchSessions.forEach(({ sessionId }) => {
+        saveThroughputLog(sessionId, result);
       });
     }, testDuration);
   };
@@ -379,8 +334,8 @@ export default function PerformanceScreen() {
         },
         body: JSON.stringify({ sessionId, result }),
       });
-    } catch (error) {
-      console.error("Gagal simpan throughput:", error);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -388,35 +343,23 @@ export default function PerformanceScreen() {
   const screenWidth = Dimensions.get("window").width;
   const chartWidth = logs.length > 5 ? logs.length * 60 : screenWidth - 32;
 
-  const delayChartData = {
-    labels: logs
-      .map((log) => new Date(log.timestamp).toLocaleTimeString())
-      .reverse(),
+  const chartData = {
+    labels: logs.map((log) => new Date(log.timestamp).toLocaleTimeString()),
     datasets: [
       { data: logs.length > 0 ? logs.map((log) => log.delay).reverse() : [0] },
     ],
   };
-
-  const throughputChartData = {
-    labels: throughputLogs
-      .map((log) => new Date(log.timestamp).toLocaleTimeString())
-      .reverse(),
-    datasets: [
-      {
-        data:
-          throughputLogs.length > 0
-            ? throughputLogs.map((log) => log.result).reverse()
-            : [0],
-      },
-    ],
-  };
-
-  const throughputChartWidth =
-    throughputLogs.length > 5 ? throughputLogs.length * 60 : screenWidth - 32;
-
   const maxDelay =
     logs.length > 0 ? Math.max(...logs.map((log) => log.delay)) : 0;
   const yAxisSegmentCount = maxDelay <= 6 ? Math.ceil(maxDelay) || 1 : 5;
+
+  // Nama File Ekspor: Single/Multi_Tanggal_User
+  const getExportFileName = () => {
+    const type = isMultiDeviceMode ? "MultiDevice" : "SingleDevice";
+    const date = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+    const username = user?.firstName || "User";
+    return `${type}_${date}_${username}`;
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -426,7 +369,7 @@ export default function PerformanceScreen() {
       >
         <Text style={styles.title}>Uji Performa Jaringan</Text>
 
-        {/* SWITCH MODE SERENTAK */}
+        {/* SWITCH MODE */}
         <View
           style={{
             flexDirection: "row",
@@ -448,7 +391,7 @@ export default function PerformanceScreen() {
             <Text style={{ fontSize: 12, color: "#666" }}>
               {isMultiDeviceMode
                 ? `Menguji ${devices.length} perangkat sekaligus`
-                : "Hanya menguji 1 perangkat yang dipilih"}
+                : "Hanya menguji perangkat yang dipilih"}
             </Text>
           </View>
           <Switch
@@ -465,7 +408,7 @@ export default function PerformanceScreen() {
               const device = devices.find((d) => d._id === itemValue);
               setSelectedDevice(device || null);
             }}
-            enabled={!isMultiDeviceMode} // Disable picker jika mode serentak
+            enabled={!isMultiDeviceMode}
             style={isMultiDeviceMode ? { opacity: 0.5 } : {}}
           >
             {devices.map((device) => (
@@ -478,40 +421,51 @@ export default function PerformanceScreen() {
           </Picker>
         </View>
 
+        {/* delay test */}
         <Button
           title={isDelayTesting ? "Hentikan Tes" : "Mulai Uji Coba Delay"}
           onPress={isDelayTesting ? stopDelayTest : startDelayTest}
           color={isDelayTesting ? "red" : Colors.light.tint}
         />
 
-        <Text style={styles.subtitle}>Riwayat Percobaan</Text>
-        <View style={{ marginBottom: 20 }}>
-          {sessions.map((session, index) => (
-            <TouchableOpacity
-              key={session._id}
-              style={[
-                styles.historyItem,
-                selectedSessionId === session._id && styles.historyItemSelected,
-              ]}
-              onPress={() =>
-                !isDelayTesting && setSelectedSessionId(session._id)
-              }
+        {/* TOMBOL EKSPOR */}
+        {lastBatchSessions.length > 0 && !isDelayTesting && (
+          <View style={{ margin: 16 }}>
+            <Button
+              title={`📥 Download Data Excel (${lastBatchSessions.length} Device)`}
+              color="#2ecc71"
+              onPress={async () => {
+                const token = await getToken();
+                if (token) {
+                  await exportBatchToCSV(
+                    lastBatchSessions,
+                    devices,
+                    token,
+                    getExportFileName()
+                  );
+                }
+              }}
+            />
+            <Text
+              style={{
+                textAlign: "center",
+                fontSize: 10,
+                color: "#666",
+                marginTop: 5,
+              }}
             >
-              <Text
-                style={selectedSessionId === session._id && { color: "white" }}
-              >
-                Percobaan #{sessions.length - index} (
-                {new Date(session.startTime).toLocaleString("id-ID")})
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+              *Menggabungkan data Delay & Throughput semua perangkat dalam batch
+              ini
+            </Text>
+          </View>
+        )}
 
+        {/* Grafik delay */}
         <Text style={styles.subtitle}>Grafik Delay (ms)</Text>
         <ScrollView horizontal={true} style={{ marginBottom: 20 }}>
           {logs.length > 0 ? (
             <LineChart
-              data={delayChartData}
+              data={chartData}
               width={chartWidth}
               height={300}
               yAxisSuffix=" ms"
@@ -543,13 +497,14 @@ export default function PerformanceScreen() {
                 width: screenWidth - 40,
               }}
             >
-              Pilih sesi atau mulai tes untuk melihat grafik.
+              Grafik akan muncul saat tes dimulai.
             </Text>
           )}
         </ScrollView>
 
         <View style={styles.separator} />
 
+        {/* throughput test */}
         <Text style={styles.subtitle}>Uji Throughput</Text>
         <Pressable
           style={[
@@ -566,51 +521,7 @@ export default function PerformanceScreen() {
           )}
         </Pressable>
 
-        {/* Grafik Throughput */}
-        <Text style={styles.subtitle}>Grafik Throughput (Req/s)</Text>
-        <ScrollView horizontal={true} style={{ marginBottom: 20 }}>
-          {throughputLogs.length > 0 ? (
-            <LineChart
-              data={throughputChartData}
-              width={throughputChartWidth}
-              height={250}
-              yAxisSuffix=" r/s"
-              fromZero={true}
-              chartConfig={{
-                backgroundColor: "#0288d1",
-                backgroundGradientFrom: "#29b6f6",
-                backgroundGradientTo: "#4fc3f7",
-                decimalPlaces: 1,
-                color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                style: { borderRadius: 16 },
-                propsForLabels: {
-                  rotation: -45,
-                  fontSize: 10,
-                  dx: -10,
-                  dy: 10,
-                },
-              }}
-              bezier
-              style={{ marginVertical: 8, borderRadius: 16 }}
-            />
-          ) : (
-            <Text
-              style={{
-                textAlign: "center",
-                padding: 20,
-                width: screenWidth - 40,
-              }}
-            >
-              Data throughput belum tersedia.
-            </Text>
-          )}
-        </ScrollView>
-
         <Text style={styles.subtitle}>Tabel Log Throughput</Text>
-        <View style={styles.tableHeader}>
-          <Text style={styles.tableHeaderText}>Waktu</Text>
-          <Text style={styles.tableHeaderText}>Hasil (Perintah/detik)</Text>
-        </View>
         {throughputLogs.map((log) => (
           <View style={styles.tableRow} key={log._id}>
             <Text>{new Date(log.timestamp).toLocaleString("id-ID")}</Text>
@@ -618,33 +529,7 @@ export default function PerformanceScreen() {
           </View>
         ))}
 
-        {totalThroughputPages > 1 && (
-          <View style={styles.paginationContainer}>
-            <Button
-              title="<"
-              onPress={() =>
-                fetchThroughputLogs(selectedSessionId!, throughputPage - 1)
-              }
-              disabled={throughputPage <= 1}
-            />
-            <Text style={styles.paginationText}>
-              {throughputPage} / {totalThroughputPages || 1}
-            </Text>
-            <Button
-              title=">"
-              onPress={() =>
-                fetchThroughputLogs(selectedSessionId!, throughputPage + 1)
-              }
-              disabled={throughputPage >= totalThroughputPages}
-            />
-          </View>
-        )}
-
         <Text style={styles.subtitle}>Tabel Log Delay</Text>
-        <View style={styles.tableHeader}>
-          <Text style={styles.tableHeaderText}>Waktu</Text>
-          <Text style={styles.tableHeaderText}>Delay (ms)</Text>
-        </View>
         {logs.map((log) => (
           <View style={styles.tableRow} key={log._id}>
             <Text>{new Date(log.timestamp).toLocaleTimeString("id-ID")}</Text>

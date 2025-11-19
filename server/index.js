@@ -457,9 +457,20 @@ app.post("/throughput-logs", async (req, res) => {
   }
 });
 
-// 6. Endpoint untuk mendapatkan log throughput dengan paginasi
+// 6. Endpoint untuk mendapatkan log throughput (Paginasi atau Semua)
 app.get("/sessions/:sessionId/throughput-logs", async (req, res) => {
   try {
+    // LOGIKA BARU: Cek apakah client meminta SEMUA data
+    if (req.query.all === "true") {
+      const logs = await ThroughputLog.find({
+        sessionId: req.params.sessionId,
+      }).sort({ timestamp: -1 }); // Tetap urutkan dari terbaru
+
+      // Kirim langsung semua logs tanpa struktur paginasi
+      return res.json({ logs });
+    }
+
+    // --- Logika Paginasi Lama (Tetap Ada) ---
     const page = parseInt(req.query.page) || 1;
     const limit = 10;
     const skip = (page - 1) * limit;
