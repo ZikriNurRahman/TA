@@ -34,6 +34,13 @@ export default function PerformanceScreen() {
   const throughputTimeoutRef = useRef<NodeJS.Timeout | number | null>(null);
   const throughputIntervalRef = useRef<NodeJS.Timeout | number | null>(null);
 
+  // Ref untuk Traffic (Kirim perintah terus menerus)
+  const throughputTrafficRef = useRef<NodeJS.Timeout | number | null>(null);
+  // Ref untuk Reporting (Simpan data tiap 5 detik)
+  const throughputReportRef = useRef<NodeJS.Timeout | number | null>(null);
+  // Ref untuk menyimpan Counter agar tidak hilang antar interval
+  const ackCountersRef = useRef<Record<string, number>>({});
+
   const { getToken } = useAuth();
   const { user } = useUser();
 
@@ -276,22 +283,21 @@ export default function PerformanceScreen() {
   };
 
   const stopTest = () => {
-    // 1. Matikan Ping Loop
+    // 1. Stop Ping
     if (intervalRef.current)
       clearInterval(intervalRef.current as NodeJS.Timeout);
     intervalRef.current = null;
 
-    // 2. Matikan Throughput Loop (jika user stop sebelum 5 detik)
-    if (throughputIntervalRef.current)
-      clearInterval(throughputIntervalRef.current as NodeJS.Timeout);
-    throughputIntervalRef.current = null;
+    // 2. Stop Traffic Loop
+    if (throughputTrafficRef.current)
+      clearInterval(throughputTrafficRef.current as NodeJS.Timeout);
+    throughputTrafficRef.current = null;
 
-    // 3. Batalkan Timer 5 detik (agar data tidak tersimpan jika di-stop)
-    if (throughputTimeoutRef.current)
-      clearTimeout(throughputTimeoutRef.current as NodeJS.Timeout);
-    throughputTimeoutRef.current = null;
+    // 3. Stop Reporting Loop
+    if (throughputReportRef.current)
+      clearInterval(throughputReportRef.current as NodeJS.Timeout);
+    throughputReportRef.current = null;
 
-    // Reset semua status UI
     setIsTesting(false);
     setIsThroughputTesting(false);
 
@@ -331,54 +337,57 @@ export default function PerformanceScreen() {
   ) => {
     setIsThroughputTesting(true);
 
-    let commandsAcknowledged = 0;
-    const testDuration = 5000; // 5 Detik
-    const commandsPerSecond = 50;
-    const totalCommands = (testDuration / 1000) * commandsPerSecond;
+    // 1. Reset Counter di Ref
+    ackCountersRef.current = {};
+    batchSessions.forEach((s) => (ackCountersRef.current[s.deviceId] = 0));
 
-    // Counter individual per device
-    const ackCounter: Record<string, number> = {};
-    batchSessions.forEach((s) => (ackCounter[s.deviceId] = 0));
+    const reportIntervalSec = 5; // Lapor setiap 5 detik
+    const commandsPerSecond = 50; // Target beban server
+    const trafficIntervalTime = 1000 / commandsPerSecond;
 
-    // Target total tembakan (dibagi rata atau dikali?) -> Stress test biasanya "Total System Load"
-    // Kita set target total 50 req/s ke server (beban konstan), didistribusikan ke device
-    // Atau jika mau stress berat: 50 req/s PER DEVICE? Hati-hati server gratisan meledak.
-    // Kita pakai: Total 50 req/s (untuk simulasi beban moderat)
-    const totalTargetRate = isMultiDeviceMode ? 50 : 50;
-
-    const intervalTime = 1000 / totalTargetRate;
-
-    const interval = setInterval(() => {
-      if (commandsAcknowledged >= totalCommands) return;
-
-      // Pilih target acak dari batch yang sedang aktif
+    // --- LOOP A: TRAFFIC (Jalan Cepat) ---
+    // Tugas: Membanjiri server dengan request
+    const trafficInterval = setInterval(() => {
+      // Pilih target acak
       const randomSession =
         batchSessions[Math.floor(Math.random() * batchSessions.length)];
+      const targetDeviceId = randomSession.deviceId;
 
-      socketRef.current?.emit(
-        "toggle_device",
-        randomSession.deviceId,
-        (res: any) => {
-          if (res?.success) commandsAcknowledged++;
+      socketRef.current?.emit("toggle_device", targetDeviceId, (res: any) => {
+        if (res?.success) {
+          // Tambah counter di Ref (Aman dari reset render)
+          if (ackCountersRef.current[targetDeviceId] !== undefined) {
+            ackCountersRef.current[targetDeviceId]++;
+          } else {
+            ackCountersRef.current[targetDeviceId] = 1;
+          }
         }
-      );
-    }, 1000 / commandsPerSecond);
-
-    throughputIntervalRef.current = interval;
-
-    const timeout = setTimeout(() => {
-      clearInterval(interval);
-      setIsThroughputTesting(false); // Matikan indikator
-
-      const result = commandsAcknowledged / (testDuration / 1000);
-
-      // Simpan hasil ke semua sesi
-      batchSessions.forEach(({ sessionId }) => {
-        saveThroughputLog(sessionId, result);
       });
-    }, testDuration);
+    }, trafficIntervalTime);
 
-    throughputTimeoutRef.current = timeout;
+    throughputTrafficRef.current = trafficInterval;
+
+    // --- LOOP B: REPORTING (Jalan Tiap 5 Detik) ---
+    // Tugas: Menghitung hasil 5 detik terakhir, simpan, lalu reset
+    const reportInterval = setInterval(() => {
+      console.log("📊 Melaporkan Throughput 5 Detik Terakhir...");
+
+      batchSessions.forEach(({ sessionId, deviceId }) => {
+        // Ambil jumlah sukses dari Ref
+        const count = ackCountersRef.current[deviceId] || 0;
+
+        // Hitung rata-rata per detik (Jumlah Sukses / 5 detik)
+        const result = count / reportIntervalSec;
+
+        // Simpan ke database
+        saveThroughputLog(sessionId, result);
+
+        // PENTING: Reset counter ke 0 untuk siklus 5 detik berikutnya!
+        ackCountersRef.current[deviceId] = 0;
+      });
+    }, reportIntervalSec * 1000);
+
+    throughputReportRef.current = reportInterval;
   };
 
   const saveThroughputLog = async (sessionId: string, result: number) => {
