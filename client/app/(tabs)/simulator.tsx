@@ -155,85 +155,77 @@ export default function SimulatorScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Device Simulator</Text>
-      <Text style={{ marginBottom: 20, textAlign: "center", color: "#666" }}>
-        Alat ini akan membuat perangkat virtual di akun Anda untuk pengujian
-        beban (Load Test).
-      </Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.headerTitle}>Generator Perangkat</Text>
 
-      <Text style={{ fontWeight: "bold", marginBottom: 5 }}>
-        Jumlah Perangkat:
-      </Text>
-      <TextInput
-        style={styles.input}
-        value={count}
-        onChangeText={setCount}
-        keyboardType="numeric"
-        placeholder="Masukkan jumlah (misal: 50)"
-        placeholderTextColor="#888"
-        editable={!isGenerating}
-      />
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Konfigurasi</Text>
 
-      <View style={{ gap: 10 }}>
-        {/* generate device button */}
-        <Button
-          title={
-            isGenerating ? "Sedang Membuat..." : `Generate ${count} Perangkat`
-          }
-          onPress={generateDevices}
-          disabled={isGenerating}
-        />
-
-        {/* delete button */}
-        <Button
-          title={isDeleting ? "Sedang Menghapus..." : "Hapus Semua Simulator"}
-          onPress={onDeletePress}
-          color="red" // Warna merah untuk tanda bahaya/hapus
-          disabled={isGenerating || isDeleting}
-        />
-
-        {/* BUTTON KHUSUS: hapus semua riwayat tes */}
-        {/* AKTIFKAN KALAU BUTUH AJA */}
-        {/* <Button
-          title="RESET TOTAL DATABASE RIWAYAT"
-          onPress={resetHistoryDatabase}
-          color="orange"
-        /> */}
-
-        {/* Log */}
-        <View
-          style={{
-            marginTop: 10,
-            height: 300,
-            backgroundColor: "#f0f0f0",
-            borderRadius: 8,
-            padding: 10,
-          }}
-        >
-          <Text style={{ fontWeight: "bold", marginBottom: 5 }}>
-            Log Aktivitas:
+          <Text
+            style={{
+              marginBottom: 8,
+              fontWeight: "600",
+              color: Colors.light.textSecondary,
+            }}
+          >
+            Jumlah Perangkat
           </Text>
-          <ScrollView>
-            {logs.length === 0 && (
-              <Text style={{ color: "#999", fontStyle: "italic" }}>
-                Belum ada aktivitas.
+          <TextInput
+            style={styles.input}
+            value={count}
+            onChangeText={setCount}
+            keyboardType="numeric"
+            placeholder="Contoh: 50"
+          />
+
+          <View style={{ gap: 12, marginTop: 10 }}>
+            <TouchableOpacity
+              style={[styles.primaryButton, isGenerating && { opacity: 0.7 }]}
+              onPress={generateDevices}
+              disabled={isGenerating}
+            >
+              {isGenerating && (
+                <ActivityIndicator color="#FFF" style={{ marginRight: 10 }} />
+              )}
+              <Text style={styles.buttonText}>
+                {isGenerating ? "Sedang Memproses..." : "Generate Perangkat"}
               </Text>
-            )}
-            {logs.map((log, index) => (
-              <Text
-                key={index}
-                style={{
-                  fontSize: 12,
-                  marginBottom: 4,
-                  fontFamily: "SpaceMono",
-                }}
-              >
-                {log}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.dangerButton, { backgroundColor: "#FEE2E2" }]} // Merah muda
+              onPress={onDeletePress}
+              disabled={isGenerating || isDeleting}
+            >
+              <Text style={[styles.buttonText, { color: Colors.light.danger }]}>
+                Hapus Semua Simulator
               </Text>
-            ))}
-          </ScrollView>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+
+        {/* Log Terminal */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Log Sistem</Text>
+          <View style={styles.logContainer}>
+            <ScrollView nestedScrollEnabled>
+              {logs.length === 0 && (
+                <Text style={{ color: "#6B7280", fontStyle: "italic" }}>
+                  Menunggu perintah...
+                </Text>
+              )}
+              {logs.map((log, index) => (
+                <Text key={index} style={styles.logText}>
+                  <Text style={{ color: "#6B7280" }}>
+                    {new Date().toLocaleTimeString()}{" "}
+                  </Text>
+                  {log}
+                </Text>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </ScrollView>
 
       {/* delete confirm modal */}
       <ConfirmModal

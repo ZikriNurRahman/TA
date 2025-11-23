@@ -1,108 +1,131 @@
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 import { Colors } from "@/constants/Colors";
 
-// style untuk HomeScreen
-export const homeStyles = StyleSheet.create({
+const isWeb = Platform.OS === "web";
+
+// Style Umum untuk Dashboard
+export const dashboardStyles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: Colors.light.background,
   },
-  header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 50,
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#000",
-  },
-  listContainer: {
-    paddingHorizontal: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f5f5f5",
-  },
-  addButton: {
-    backgroundColor: Colors.light.tint,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  addButtonText: {
-    color: "#fff",
-    fontSize: 24,
-    lineHeight: 28,
-  },
-});
-
-// Styles untuk DeviceCard.tsx
-export const deviceCardStyles = StyleSheet.create({
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
+  scrollContent: {
     padding: 16,
-    borderRadius: 12,
+    paddingBottom: 100,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: Colors.light.text,
+    marginBottom: 20,
+    letterSpacing: 0.5,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.light.text,
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  // --- KOMPONEN KARTU (CARD) ---
+  card: {
+    backgroundColor: Colors.light.card,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    // Shadow halus
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  // --- BUTTONS ---
+  primaryButton: {
+    backgroundColor: Colors.light.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  dangerButton: {
+    backgroundColor: Colors.light.danger,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  buttonText: {
+    color: "#FFFFFF",
+    fontWeight: "600",
+    fontSize: 16,
+  },
+  // --- INPUTS ---
+  input: {
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: Colors.light.text,
     marginBottom: 12,
   },
-  icon: {
-    fontSize: 32,
-    marginRight: 16,
+  // --- LOGS ---
+  logContainer: {
+    backgroundColor: "#1F2937", // Gelap seperti terminal
+    borderRadius: 8,
+    padding: 12,
+    height: 250,
   },
-  textContainer: {
-    flex: 1,
-    backgroundColor: "transparent",
+  logText: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    fontSize: 12,
+    color: "#10B981", // Teks hijau terminal
+    marginBottom: 4,
   },
-  subtitle: {
-    fontSize: 20,
+  // --- TABLES ---
+  tableHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: Colors.light.border,
+    marginBottom: 8,
+  },
+  tableRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
+  },
+  tableHeaderText: {
     fontWeight: "bold",
+    color: Colors.light.textSecondary,
+    fontSize: 14,
+  },
+  tableText: {
+    color: Colors.light.text,
+    fontSize: 14,
   },
 });
 
-// Styles untuk DeviceDetailScreen ([id].tsx)
-export const idStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: "#f5f5f5",
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  detail: {
-    fontSize: 18,
-    marginBottom: 10,
-  },
-  errorText: {
-    fontSize: 18,
-    textAlign: "center",
-    color: "red",
-  },
-  buttonContainer: {
-    marginTop: "auto",
-    paddingTop: 20,
-  },
-  inputText: {
-    height: 50,
-    borderColor: "#ccc",
-    borderWidth: 1,
-    borderRadius: 8,
-    marginBottom: 15,
-    paddingHorizontal: 15,
-    backgroundColor: "#fff",
-  },
-});
+// Export alias agar kompatibel dengan kode lama Anda
+export const homeStyles = dashboardStyles;
+export const performanceStyles = dashboardStyles;
+export const addDeviceStyles = dashboardStyles;
+export const idStyles = dashboardStyles;
 
 // Style dinamis untuk DeviceCard
 export const dynamicCardStyles = {
@@ -129,30 +152,6 @@ export const dynamicCardStyles = {
     shadowRadius: 2,
   },
 };
-
-// Styles untuk AddDeviceScreen (add-device.tsx)
-export const addDeviceStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: "#f5f5f5",
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  input: {
-    height: 50,
-    borderColor: "#ccc",
-    borderWidth: 1,
-    borderRadius: 8,
-    marginBottom: 15,
-    paddingHorizontal: 15,
-    backgroundColor: "#fff",
-  },
-});
 
 // Styles untuk ConfirmModal.tsx
 export const confirmModalStyles = StyleSheet.create({
@@ -191,107 +190,5 @@ export const confirmModalStyles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-around",
     width: "100%",
-  },
-});
-
-// Styles untuk PerformanceScreen (performance.tsx)
-export const performanceStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5f5f5",
-    padding: 10,
-  },
-  scrollView: {
-    paddingHorizontal: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginVertical: 20,
-  },
-  subtitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    marginTop: 20,
-    marginBottom: 10,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: "#ddd",
-    marginVertical: 30,
-  },
-  button: {
-    backgroundColor: Colors.light.tint,
-    padding: 15,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  buttonDisabled: {
-    backgroundColor: "#aaa",
-  },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
-  },
-  resultContainer: {
-    marginTop: 20,
-    padding: 15,
-    backgroundColor: "#e0f7fa",
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  resultText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: Colors.light.tint,
-  },
-  pickerContainer: {
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    backgroundColor: "#fff",
-  },
-  tableHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#ccc",
-    backgroundColor: "#eee",
-  },
-  tableHeaderText: {
-    fontWeight: "bold",
-  },
-  tableRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  historyItem: {
-    backgroundColor: "#fff",
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  historyItemSelected: {
-    backgroundColor: Colors.light.tint,
-    borderColor: Colors.light.tint,
-  },
-  paginationContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-    marginTop: 10,
-  },
-  paginationText: {
-    fontSize: 16,
-    fontWeight: "bold",
   },
 });
