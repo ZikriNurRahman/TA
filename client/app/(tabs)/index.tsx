@@ -120,8 +120,26 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={homeStyles.container}>
       {/* judul dan add device */}
-      <View style={homeStyles.headerTitle}>
-        <Text style={homeStyles.sectionTitle}>Perangkat</Text>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          paddingHorizontal: 16,
+          paddingTop: 50,
+          marginBottom: 20,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 28,
+            fontWeight: "bold",
+            color: "#000",
+          }}
+        >
+          Perangkat
+        </Text>
+
         <Link href="/add-device" asChild>
           <TouchableOpacity style={homeStyles.primaryButton}>
             <Text style={homeStyles.buttonText}>+</Text>
