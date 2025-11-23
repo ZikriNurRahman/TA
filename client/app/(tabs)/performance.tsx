@@ -16,24 +16,24 @@ import { LineChart } from "react-native-chart-kit";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { io, Socket } from "socket.io-client";
 import { useAuth, useUser } from "@clerk/clerk-expo";
-
 import { Device } from "@/types/Device";
 import { PerformanceLog } from "@/types/PerformanceLog";
 import { TestSession } from "@/types/TestSession";
 import { ThroughputLog } from "@/types/ThroughputLog";
-
 import { performanceStyles as styles } from "@/styles/styles";
 import { Colors } from "@/constants/Colors";
 import { API_URL } from "@/constants/api";
 import { exportBatchToCSV } from "@/utils/csvExporter";
+import { Card } from "@/components/ui/Card";
+import { ModernButton } from "@/components/ui/ModernButton";
 
 export default function PerformanceScreen() {
   const socketRef = useRef<Socket | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | number | null>(null);
+
   // Ref tambahan untuk timer throughput agar bisa dibatalkan
   const throughputTimeoutRef = useRef<NodeJS.Timeout | number | null>(null);
   const throughputIntervalRef = useRef<NodeJS.Timeout | number | null>(null);
-
   // Ref untuk Traffic (Kirim perintah terus menerus)
   const throughputTrafficRef = useRef<NodeJS.Timeout | number | null>(null);
   // Ref untuk Reporting (Simpan data tiap 5 detik)
@@ -56,7 +56,6 @@ export default function PerformanceScreen() {
   const [logs, setLogs] = useState<PerformanceLog[]>([]);
   const [isTesting, setIsTesting] = useState(false); // Menggantikan isDelayTesting
   const [isThroughputTesting, setIsThroughputTesting] = useState(false); // Status spesifik throughput
-
   const [throughputLogs, setThroughputLogs] = useState<ThroughputLog[]>([]);
   const [throughputPage, setThroughputPage] = useState(1);
   const [totalThroughputPages, setTotalThroughputPages] = useState(1);
@@ -206,7 +205,7 @@ export default function PerformanceScreen() {
     }
   }, [selectedSessionId]);
 
-  // --- FUNGSI UTAMA: START STRESS TEST (GABUNGAN) ---
+  // --- FUNGSI UTAMA: START STRESS TEST ---
   const startStressTest = async () => {
     const targets = isMultiDeviceMode
       ? devices
@@ -437,6 +436,7 @@ export default function PerformanceScreen() {
       },
     ],
   };
+
   const throughputChartWidth =
     throughputLogs.length > 5 ? throughputLogs.length * 60 : screenWidth - 32;
 
@@ -447,254 +447,284 @@ export default function PerformanceScreen() {
     return `${type}_${date}_${username}`;
   };
 
+  // Konfigurasi grafik yang lebih bersih dan modern
+  const chartConfig = {
+    backgroundColor: "#ffffff",
+    backgroundGradientFrom: "#ffffff",
+    backgroundGradientTo: "#ffffff",
+    decimalPlaces: 0,
+    color: (opacity = 1) => `rgba(37, 99, 235, ${opacity})`, // Warna Biru Primary dengan Opacity
+    labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`, // Warna text abu-abu
+    style: {
+      borderRadius: 16,
+    },
+    propsForDots: {
+      r: "4", // Ukuran titik data
+      strokeWidth: "2",
+      stroke: "#2563EB", // Warna border titik
+    },
+    propsForBackgroundLines: {
+      strokeDasharray: "", // Garis solid, bukan putus-putus (lebih rapi)
+      stroke: "#E5E7EB", // Warna garis grid sangat halus
+    },
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 100 }}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Text style={styles.title}>Uji Performa Jaringan</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.headerTitle}>Analisis Performa</Text>
 
-        {/* SWITCH MODE */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 15,
-            marginHorizontal: 16,
-            padding: 10,
-            backgroundColor: "#fff",
-            borderRadius: 8,
-            borderWidth: 1,
-            borderColor: "#ddd",
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontWeight: "bold", fontSize: 16 }}>
-              Uji Semua Perangkat
-            </Text>
-            <Text style={{ fontSize: 12, color: "#666" }}>
-              {isMultiDeviceMode
-                ? `Target: ${devices.length} perangkat`
-                : "Target: 1 perangkat terpilih"}
-            </Text>
-          </View>
-          <Switch
-            value={isMultiDeviceMode}
-            onValueChange={setIsMultiDeviceMode}
-            trackColor={{ false: "#767577", true: Colors.light.tint }}
-          />
-        </View>
+        {/* KARTU KONTROL */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Pengaturan Tes</Text>
 
-        <View style={styles.pickerContainer}>
-          <Picker
-            selectedValue={selectedDevice?._id}
-            onValueChange={(itemValue) => {
-              const device = devices.find((d) => d._id === itemValue);
-              setSelectedDevice(device || null);
-            }}
-            enabled={!isMultiDeviceMode}
-            style={isMultiDeviceMode ? { opacity: 0.5 } : {}}
-          >
-            {devices.map((device) => (
-              <Picker.Item
-                key={device._id}
-                label={device.name}
-                value={device._id}
-              />
-            ))}
-          </Picker>
-        </View>
-
-        {/* SATU TOMBOL UNTUK SEMUA */}
-        <Button
-          title={
-            isTesting
-              ? "Hentikan Stress Test"
-              : "Mulai Stress Test (Delay & Throughput)"
-          }
-          onPress={isTesting ? stopTest : startStressTest}
-          color={isTesting ? "red" : Colors.light.tint}
-        />
-        {isThroughputTesting && (
-          <Text
+          {/* Switch Row */}
+          <View
             style={{
-              textAlign: "center",
-              marginTop: 5,
-              color: "#e67e22",
-              fontWeight: "bold",
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingVertical: 10,
+              borderBottomWidth: 1,
+              borderBottomColor: "#F3F4F6",
+              marginBottom: 15,
             }}
           >
-            ⚡ Sedang membanjiri traffic (Throughput Test)...
-          </Text>
-        )}
-
-        {/* DOWNLOAD BUTTON */}
-
-        {lastBatchSessions.length > 0 && !isTesting && (
-          <View style={{ margin: 16 }}>
-            <Button
-              title={`📥 Download Data Excel (${devices.length} Device)`}
-              color="#2ecc71"
-              onPress={async () => {
-                const token = await getToken();
-                if (token) {
-                  await exportBatchToCSV(
-                    lastBatchSessions,
-                    devices,
-                    token,
-                    getExportFileName()
-                  );
-                }
-              }}
+            <View>
+              <Text
+                style={{
+                  fontSize: 16,
+                  fontWeight: "600",
+                  color: Colors.light.text,
+                }}
+              >
+                Uji Semua Perangkat
+              </Text>
+              <Text style={{ fontSize: 12, color: Colors.light.textSecondary }}>
+                Target:{" "}
+                {isMultiDeviceMode
+                  ? `${devices.length} Devices`
+                  : "Single Device"}
+              </Text>
+            </View>
+            <Switch
+              value={isMultiDeviceMode}
+              onValueChange={setIsMultiDeviceMode}
+              trackColor={{ false: "#E5E7EB", true: Colors.light.primary }}
             />
           </View>
-        )}
 
-        <Text style={styles.subtitle}>Riwayat Percobaan</Text>
-
-        <View style={{ marginBottom: 20 }}>
-          {sessions.map((session, index) => (
-            <TouchableOpacity
-              key={session._id}
-              style={[
-                styles.historyItem,
-                selectedSessionId === session._id && styles.historyItemSelected,
-              ]}
-              onPress={() => !isTesting && setSelectedSessionId(session._id)}
+          {/* Picker */}
+          {!isMultiDeviceMode && (
+            <View
+              style={[styles.input, { padding: 0, justifyContent: "center" }]}
             >
-              <Text
-                style={selectedSessionId === session._id && { color: "white" }}
+              <Picker
+                selectedValue={selectedDevice?._id}
+                onValueChange={(itemValue) => {
+                  const device = devices.find((d) => d._id === itemValue);
+                  setSelectedDevice(device || null);
+                }}
+                style={{ height: 50, width: "100%" }}
               >
-                Percobaan #{sessions.length - index} (
-                {new Date(session.startTime).toLocaleString("id-ID")})
+                {devices.map((device) => (
+                  <Picker.Item
+                    key={device._id}
+                    label={device.name}
+                    value={device._id}
+                  />
+                ))}
+              </Picker>
+            </View>
+          )}
+
+          {/* Tombol Utama */}
+          <TouchableOpacity
+            style={[
+              styles.primaryButton,
+              {
+                backgroundColor: isTesting
+                  ? Colors.light.danger
+                  : Colors.light.primary,
+              },
+            ]}
+            onPress={isTesting ? stopTest : startStressTest}
+          >
+            <Text style={styles.buttonText}>
+              {isTesting ? "⏹ Hentikan Stress Test" : "▶ Mulai Stress Test"}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Status Loading */}
+          {isThroughputTesting && (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "center",
+                alignItems: "center",
+                marginTop: 10,
+                gap: 8,
+              }}
+            >
+              <ActivityIndicator color={Colors.light.warning} />
+              <Text style={{ color: Colors.light.warning, fontWeight: "600" }}>
+                Sedang membanjiri traffic...
               </Text>
-            </TouchableOpacity>
-          ))}
+            </View>
+          )}
         </View>
 
-        <Text style={styles.subtitle}>Grafik Delay (ms)</Text>
-        <ScrollView horizontal={true} style={{ marginBottom: 20 }}>
-          {logs.length > 0 ? (
+        {/* KARTU RIWAYAT & EKSPOR */}
+        <View style={styles.card}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: 10,
+            }}
+          >
+            <Text style={styles.sectionTitle}>Riwayat Sesi</Text>
+
+            {/* Tombol Download Kecil di Header Card */}
+            {lastBatchSessions.length > 0 && !isTesting && (
+              <TouchableOpacity
+                onPress={async () => {
+                  const token = await getToken();
+                  if (token)
+                    await exportBatchToCSV(
+                      lastBatchSessions,
+                      devices,
+                      token,
+                      getExportFileName()
+                    );
+                }}
+                style={{
+                  backgroundColor: Colors.light.success,
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 20,
+                }}
+              >
+                <Text
+                  style={{ color: "#FFF", fontSize: 12, fontWeight: "bold" }}
+                >
+                  📥 Download CSV
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <ScrollView style={{ maxHeight: 150 }} nestedScrollEnabled>
+            {sessions.map((session, index) => (
+              <TouchableOpacity
+                key={session._id}
+                style={{
+                  padding: 12,
+                  backgroundColor:
+                    selectedSessionId === session._id ? "#EFF6FF" : "#FFF",
+                  borderRadius: 8,
+                  marginBottom: 4,
+                  borderWidth: 1,
+                  borderColor:
+                    selectedSessionId === session._id
+                      ? Colors.light.primary
+                      : "#F3F4F6",
+                }}
+                onPress={() => !isTesting && setSelectedSessionId(session._id)}
+              >
+                <Text
+                  style={{
+                    color:
+                      selectedSessionId === session._id
+                        ? Colors.light.primary
+                        : Colors.light.text,
+                    fontWeight: "600",
+                  }}
+                >
+                  Sesi #{sessions.length - index}
+                </Text>
+                <Text
+                  style={{ fontSize: 12, color: Colors.light.textSecondary }}
+                >
+                  {new Date(session.startTime).toLocaleString("id-ID")}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* KARTU GRAFIK DELAY */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Grafik Delay (ms)</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            {/* ... Kode LineChart Delay (Sama seperti sebelumnya) ... */}
+            {/* Pastikan backgroundColor di chartConfig diubah jadi '#ffffff' agar nyatu dengan kartu */}
             <LineChart
               data={delayChartData}
               width={delayChartWidth}
-              height={300}
+              height={250}
               yAxisSuffix=" ms"
-              fromZero={true}
-              segments={yAxisSegmentCount}
               chartConfig={{
-                backgroundColor: "#e26a00",
-                backgroundGradientFrom: "#fb8c00",
-                backgroundGradientTo: "#ffa726",
+                backgroundColor: "#ffffff",
+                backgroundGradientFrom: "#ffffff",
+                backgroundGradientTo: "#ffffff",
                 decimalPlaces: 0,
-                color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                style: { borderRadius: 16 },
-                propsForLabels: {
-                  rotation: -45,
-                  fontSize: 10,
-                  dx: -10,
-                  dy: 10,
-                },
-                formatYLabel: (yValue) => Math.round(Number(yValue)).toString(),
+                color: (opacity = 1) => `rgba(37, 99, 235, ${opacity})`, // Warna Biru
+                labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+                propsForDots: { r: "4", strokeWidth: "2", stroke: "#2563EB" },
               }}
               bezier
               style={{ marginVertical: 8, borderRadius: 16 }}
             />
-          ) : (
-            <Text
-              style={{
-                textAlign: "center",
-                padding: 20,
-                width: screenWidth - 40,
-              }}
-            >
-              Grafik akan muncul saat tes dimulai.
-            </Text>
-          )}
-        </ScrollView>
-
-        <Text style={styles.subtitle}>Grafik Throughput (Req/s)</Text>
-        <ScrollView horizontal={true} style={{ marginBottom: 20 }}>
-          {throughputLogs.length > 0 ? (
-            <LineChart
-              data={throughputChartData}
-              width={throughputChartWidth}
-              height={300}
-              yAxisSuffix=" r/s"
-              fromZero={true}
-              chartConfig={{
-                backgroundColor: "#0288d1",
-                backgroundGradientFrom: "#29b6f6",
-                backgroundGradientTo: "#4fc3f7",
-                decimalPlaces: 1,
-                color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                style: { borderRadius: 16 },
-                propsForLabels: {
-                  rotation: -45,
-                  fontSize: 10,
-                  dx: -10,
-                  dy: 10,
-                },
-              }}
-              bezier
-              style={{ marginVertical: 8, borderRadius: 16 }}
-            />
-          ) : (
-            <Text
-              style={{
-                textAlign: "center",
-                padding: 20,
-                width: screenWidth - 40,
-              }}
-            >
-              Data throughput muncul setelah 5 detik.
-            </Text>
-          )}
-        </ScrollView>
-
-        {/* Tabel Log & Paginasi... (Bagian ini tetap sama) */}
-        <Text style={styles.subtitle}>Tabel Log Throughput</Text>
-        {throughputLogs.map((log) => (
-          <View style={styles.tableRow} key={log._id}>
-            <Text>{new Date(log.timestamp).toLocaleString("id-ID")}</Text>
-            <Text>{log.result.toFixed(2)}</Text>
+          </ScrollView>
+          {/* Tabel Delay */}
+          <View style={styles.tableHeader}>
+            <Text style={styles.tableHeaderText}>Timestamp</Text>
+            <Text style={styles.tableHeaderText}>Value</Text>
           </View>
-        ))}
-        {totalThroughputPages > 1 && (
-          <View style={styles.paginationContainer}>
-            <Button
-              title="<"
-              onPress={() =>
-                fetchThroughputLogs(selectedSessionId!, throughputPage - 1)
-              }
-              disabled={throughputPage <= 1}
-            />
-            <Text style={styles.paginationText}>
-              {throughputPage} / {totalThroughputPages || 1}
-            </Text>
-            <Button
-              title=">"
-              onPress={() =>
-                fetchThroughputLogs(selectedSessionId!, throughputPage + 1)
-              }
-              disabled={throughputPage >= totalThroughputPages}
-            />
-          </View>
-        )}
-
-        <Text style={styles.subtitle}>Tabel Log Delay</Text>
-        <View style={styles.tableHeader}>
-          <Text style={styles.tableHeaderText}>Waktu</Text>
-          <Text style={styles.tableHeaderText}>Delay (ms)</Text>
+          {logs.slice(0, 5).map(
+            (
+              log // Tampilkan 5 saja biar rapi
+            ) => (
+              <View style={styles.tableRow} key={log._id}>
+                <Text style={styles.tableText}>
+                  {new Date(log.timestamp).toLocaleTimeString("id-ID")}
+                </Text>
+                <Text
+                  style={{ fontWeight: "bold", color: Colors.light.primary }}
+                >
+                  {log.delay} ms
+                </Text>
+              </View>
+            )
+          )}
         </View>
-        {logs.map((log) => (
-          <View style={styles.tableRow} key={log._id}>
-            <Text>{new Date(log.timestamp).toLocaleTimeString("id-ID")}</Text>
-            <Text>{log.delay} ms</Text>
-          </View>
-        ))}
+
+        {/* KARTU GRAFIK THROUGHPUT */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Grafik Throughput</Text>
+          {/* ... Kode LineChart Throughput ... */}
+          <LineChart
+            data={throughputChartData}
+            width={throughputChartWidth}
+            height={250}
+            yAxisSuffix=" r/s"
+            chartConfig={{
+              backgroundColor: "#ffffff",
+              backgroundGradientFrom: "#ffffff",
+              backgroundGradientTo: "#ffffff",
+              decimalPlaces: 1,
+              color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`, // Warna Hijau
+              labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+              propsForDots: { r: "4", strokeWidth: "2", stroke: "#10B981" },
+            }}
+            bezier
+            style={{ marginVertical: 8, borderRadius: 16 }}
+          />
+          {/* Tabel Throughput */}
+          {/* ... kode tabel throughput ... */}
+        </View>
       </ScrollView>
     </SafeAreaView>
   );

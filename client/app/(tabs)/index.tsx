@@ -111,7 +111,7 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={homeStyles.loadingContainer}>
+      <SafeAreaView style={homeStyles.container}>
         <Text>Memuat perangkat...</Text>
       </SafeAreaView>
     );
@@ -120,11 +120,29 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={homeStyles.container}>
       {/* judul dan add device */}
-      <View style={homeStyles.header}>
-        <Text style={homeStyles.title}>Perangkat</Text>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+          paddingHorizontal: 16,
+          paddingTop: 50,
+          marginBottom: 20,
+        }}
+      >
+        <Text
+          style={{
+            fontSize: 28,
+            fontWeight: "bold",
+            color: "#000",
+          }}
+        >
+          Perangkat
+        </Text>
+
         <Link href="/add-device" asChild>
-          <TouchableOpacity style={homeStyles.addButton}>
-            <Text style={homeStyles.addButtonText}>+</Text>
+          <TouchableOpacity style={homeStyles.primaryButton}>
+            <Text style={homeStyles.buttonText}>+</Text>
           </TouchableOpacity>
         </Link>
       </View>
@@ -144,7 +162,7 @@ export default function HomeScreen() {
           renderItem={({ item }) => (
             <DeviceCard device={item} onToggle={() => handleToggle(item._id)} />
           )}
-          contentContainerStyle={homeStyles.listContainer}
+          contentContainerStyle={homeStyles.scrollContent}
         />
       )}
     </SafeAreaView>

@@ -1,67 +1,107 @@
 import React from "react";
-import { Switch, Text, View, Pressable } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Switch } from "react-native";
+import { Link } from "expo-router";
 import { Device } from "@/types/Device";
-import { deviceCardStyles, dynamicCardStyles } from "@/styles/styles";
-import { useRouter } from "expo-router";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Colors } from "@/constants/Colors";
+import { dashboardStyles } from "@/styles/styles";
+import { Ionicons } from "@expo/vector-icons";
 
-type DeviceCardProps = {
+interface DeviceCardProps {
   device: Device;
   onToggle: () => void;
-};
+}
 
 export function DeviceCard({ device, onToggle }: DeviceCardProps) {
-  const router = useRouter();
-  const icon = device.type === "light" ? "" : "";
-  const styles = device.isOn ? dynamicCardStyles.on : dynamicCardStyles.off;
-
-  // Fungsi untuk menangani navigasi
-  const handleNavigation = () => {
-    router.push({
-      pathname: "/devices/[id]",
-      params: { id: device._id },
-    });
-  };
-
-  // 2. Pilih nama ikon berdasarkan tipe perangkat
-  const getIconName = () => {
-    if (device.type.toLowerCase() === "light") return "lightbulb";
-    if (device.type.toLowerCase() === "fan") return "fan";
-    return "chip"; // Ikon default
-  };
-
   return (
-    // Gunakan View sebagai pembungkus luar
-    <View
-      style={[
-        deviceCardStyles.card,
-        { backgroundColor: styles.backgroundColor },
-      ]}
-    >
-      {/* Gunakan Pressable untuk area navigasi */}
-      <Pressable
-        onPress={handleNavigation}
-        style={{ flexDirection: "row", flex: 1, alignItems: "center" }}
+    // 1. Wadah Kartu (Hanya View biasa, bukan tombol)
+    <View style={dashboardStyles.card}>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "center",
+        }}
       >
-        <Text style={deviceCardStyles.icon}>{icon}</Text>
-        <View style={deviceCardStyles.textContainer}>
-          <Text
-            style={[deviceCardStyles.subtitle, { color: styles.titleColor }]}
+        {/* 2. Area Kiri: Navigasi ke Detail (Dibungkus Link) */}
+        <Link href={`/devices/${device._id}`} asChild>
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+            }}
+            activeOpacity={0.7}
           >
-            {device.name}
-          </Text>
-          <Text style={{ color: styles.statusColor }}>
-            Status: {device.isOn ? "Menyala" : "Mati"}
+            <View
+              style={[
+                styles.iconBox,
+                { backgroundColor: device.isOn ? "#D1FAE5" : "#F3F4F6" },
+              ]}
+            >
+              <Ionicons
+                name={device.type === "fan" ? "aperture" : "bulb"}
+                size={24}
+                color={device.isOn ? Colors.light.success : Colors.light.icon}
+              />
+            </View>
+
+            <View>
+              <Text style={styles.deviceName}>{device.name}</Text>
+              <Text style={styles.deviceType}>
+                {device.type === "fan" ? "Kipas Angin" : "Lampu"}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </Link>
+
+        {/* 3. Area Kanan: Switch (Di luar Link, tidak memicu navigasi) */}
+        <View style={{ alignItems: "center", paddingLeft: 10 }}>
+          <Switch
+            value={device.isOn}
+            onValueChange={onToggle}
+            trackColor={{ false: "#E5E7EB", true: Colors.light.success }}
+            thumbColor={"#FFFFFF"}
+          />
+          <Text
+            style={[
+              styles.statusText,
+              {
+                color: device.isOn
+                  ? Colors.light.success
+                  : Colors.light.textSecondary,
+              },
+            ]}
+          >
+            {device.isOn ? "ON" : "OFF"}
           </Text>
         </View>
-      </Pressable>
-      {/* Switch berada di luar Pressable, sehingga event-nya terisolasi */}
-      <Switch
-        trackColor={{ false: "#767577", true: "#81b0ff" }}
-        thumbColor={device.isOn ? "#f5dd4b" : "#f4f3f4"}
-        onValueChange={onToggle}
-        value={device.isOn}
-      />
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  iconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deviceName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: Colors.light.text,
+  },
+  deviceType: {
+    fontSize: 12,
+    color: Colors.light.textSecondary,
+    textTransform: "capitalize",
+  },
+  statusText: {
+    fontSize: 10,
+    fontWeight: "bold",
+    marginTop: 4,
+  },
+});
