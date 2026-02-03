@@ -30,27 +30,18 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="house.fill" color={color} />
-          ),
         }}
       />
       <Tabs.Screen
         name="performance"
         options={{
           title: "Performance",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="chart.bar.fill" color={color} />
-          ),
         }}
       />
       <Tabs.Screen
         name="simulator"
         options={{
           title: "Simulator",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol size={28} name="gearshape.2.fill" color={color} />
-          ),
         }}
       />
     </Tabs>
