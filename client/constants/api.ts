@@ -31,6 +31,6 @@ if (process.env.NODE_ENV === "development") {
   apiUrl = Constants.expoConfig?.extra?.apiUrl as string;
 }
 
-export const API_URL = apiUrl;
+export const API_URL = "http://10.28.182.30:3000";
 
 console.log(`Platform: ${Platform.OS}, API URL is set to: ${API_URL}`);
